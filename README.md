@@ -127,6 +127,12 @@ The response is an array of objects like the following
 
 > GET `file_url`
 
+First check if the response contains `'Impossibile trovare la pagina'`, if so, the recording has been deleted or isn't available at the moment.
+
+Then check for `recordingpasswordcheck`. If not found, then the recording doesn't need a password and you can skip forward as if you had just made a request to the `matched nbrshared.do url`.
+
+Otherwise, a password is required. Follow the following steps...
+
 Get all `name` and `values` attributes from the input tags.
 
 You may need to change `firstEntry` to false since in the js it does

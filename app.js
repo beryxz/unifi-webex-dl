@@ -4,7 +4,6 @@ const { launchWebex, getWebexRecordings, getWebexRecording } = require('./helper
 const logger = require('./helpers/logging')('app');
 const { join } = require('path');
 const { existsSync } = require('fs');
-const { exit } = require('process');
 
 (async () => {
     try {
@@ -16,11 +15,11 @@ const { exit } = require('process');
         logger.info('Logging into Moodle');
         const moodleSession = await loginMoodle(configs.credentials.username, configs.credentials.password);
 
-        for (const id of configs.courses_ids) {
-            logger.info(`Working on course: ${id}`);
+        for (const courseId of configs.courses_ids) {
+            logger.info(`Working on course: ${courseId}`);
 
             // Launch webex
-            let launchParameters = await getWebexLaunchOptions(moodleSession, id);
+            let launchParameters = await getWebexLaunchOptions(moodleSession, courseId);
             if (launchParameters === null) {
                 logger.warn('└─ Webex id not found... Skipping');
             }
@@ -34,20 +33,26 @@ const { exit } = require('process');
             //TODO: implement multiple downloads at once
             for (let idx = 0; idx < recordings.length; idx++) {
                 const recording = recordings[idx];
-                let downloadPath = join(configs.base_path, recording.name);
-                let divider = idx == recordings.length-1 ? '└' : '├';
+                let filename = `${recording.name}.${recording.format}`.replace(/[\\/:"*?<>| ]/g, '_');
+                let downloadPath = join(configs.base_path, '' + courseId, filename);
+                let divider = (idx == recordings.length-1) ? '└' : '├';
 
                 if (!existsSync(downloadPath)) {
                     logger.info(`   ${divider}─ Downloading: ${recording.name}`);
-                    await getWebexRecording(recording.file_url, recording.password, downloadPath);
-                    exit(0);
+                    //TODO: Show download status while downloading
+                    try {
+                        await getWebexRecording(recording.file_url, recording.password, downloadPath);
+                    } catch (error) {
+                        logger.error(`      └─ Skipped because of ${error}`);
+                        continue;
+                    }
                 } else {
-                    logger.info(`   ${divider}─ Skipping: ${recording.name}`);
+                    logger.info(`   ${divider}─ Alredy exists: ${recording.name}`);
                 }
             }
-
-            logger.info('Done');
         }
+
+        logger.info('Done');
     } catch (err) {
         logger.error(err);
     }
