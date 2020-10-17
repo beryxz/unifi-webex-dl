@@ -10,7 +10,17 @@ Copy `config.example.json` to `config.json` and change credentials and courses i
 
 Run the app with: `npm start`
 
+## Config
+
+In alternative the config may be specified using environment variables. Just convert the config names to uppercase.
+
+To modify the default log level of 'info', set the env variable `LOG_LEVEL` with one of [winston available log_level](https://github.com/winstonjs/winston#logging-levels).
+
 ## How it works
+
+Unfortunately, UniFi Moodle doesn't make use of rest apis. So we have to do a bit of guessing and matching on the response body.
+
+This approch works for now but is prone to errors and stop working if something get changed. Feel free to open an issue or a PR to update the process.
 
 ### Login to Moodle
 
@@ -23,19 +33,18 @@ Get `MoodleSession` cookie from header and in the response body match the first
 Then post the form with the loginToken.
 
 > POST <https://e-l.unifi.it/login/index.php>
+> Content-Type: application/x-www-form-urlencoded
+> Cookie: MoodleSession
 
-The request should match the following
+The request body should match the following
 
-```http
-Content-Type: application/x-www-form-urlencoded
-Cookie: MoodleSession=***
-
+```json
 {
-    anchor: null,
-    logintoken: 'P1pp0Plu70',
-    username: 00000,
-    password: *****,
-    rememberusername: 0
+    'anchor': null,
+    'logintoken': 'P1pp0Plu70',
+    'username': 00000,
+    'password': '*****',
+    'rememberusername': 0
 }
 ```
 
@@ -93,7 +102,7 @@ Authorization: Bearer json_web_token
 Cookie: ahoy_visitor=***,ahoy_visit=***,_ea_involvio_lti_session=***
 ```
 
-The response is an object like the following
+The response is an array of objects like the following
 
 ```json
 [
@@ -110,9 +119,7 @@ The response is an object like the following
         "recording_url": "https://unifirenze.webex.com/unifirenze/ldr.php?RCID=******",
         "timezone": "",
         "updated_at": ""
-    }, {
-        ...
-    }, ...
+    }
 ]
 ```
 
@@ -122,13 +129,20 @@ The response is an object like the following
 
 Get all `name` and `values` attributes from the input tags.
 
+You may need to change `firstEntry` to false since in the js it does
+
+```js
+document.forms[0].firstEntry.value=false;
+```
+
 > POST <https://unifirenze.webex.com/svc3300/svccomponents/servicerecordings/recordingpasswordcheck.do>
 
-The body should contain the input attributes from the previous request and the password of the course
+The body should contain the input attributes from the previous request and the password of the recording
 
 Then match `var href='https://unifirenze.webex.com/mw3300/mywebex/nbrshared.do?siteurl=unifirenze-en&action=publishfile&recordID=***&serviceRecordID=***&recordKey=***';`
 
-> GET `matched nbrshared.do url`
+> POST `matched nbrshared.do url`
+> Content-Type: application/x-www-form-urlencoded
 
 Match the following part
 
@@ -154,7 +168,7 @@ Match `window.parent.func_prepare('***','***','***');`
 
 This is the function declaration `func_prepare(status, url, ticket)` that i'll reefer to.
 
-Check the `status` that could be one of the following ["OKOK", "Preparing", "Error", "null if bug?"]
+Check the `status` that could be one of the following [`OKOK`, `Preparing`, `Error`, "null if bug?"]
 
 - Error:
   - Throw error and skip this file

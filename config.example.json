@@ -3,5 +3,6 @@
         "username": "00000",
         "password": "*****"
     },
-    "courses_ids": [1, 2, 3]
+    "courses_ids": [1, 2, 3],
+    "base_path": "./downloads"
 }

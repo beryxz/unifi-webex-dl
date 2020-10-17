@@ -2,21 +2,7 @@ const axios = require('axios').default;
 const qs = require('qs');
 const cheerio = require('cheerio');
 const logger = require('./logging')('moodle');
-
-/**
- * Retrieves the MoodleSession cookie from the array if exists. Throw an error otherwise
- * @param {Array} cookies Cookies jar
- * @returns {String} The MoodleSession cookie if found
- * @throws {Error} If the MoodleSession cookie couldn't be found
- */
-function checkMoodleCookie(cookies) {
-    for (const c of cookies) {
-        if (c.startsWith('MoodleSession='))
-            return c;
-    }
-
-    throw new Error('Invalid cookies');
-}
+const { checkMoodleCookie } = require('./cookie');
 
 /**
  * Login into Moddle platform and return sessionToken cookie.
