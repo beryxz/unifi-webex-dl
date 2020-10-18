@@ -1,6 +1,7 @@
 const axios = require('axios').default;
 const logger = require('./logging')('webex');
 const cheerio = require('cheerio');
+const qs = require('qs');
 const { createWriteStream, unlinkSync } = require('fs');
 const { getCookies } = require('./cookie');
 
@@ -53,19 +54,105 @@ async function getWebexRecordings(webexObject) {
 }
 
 /**
- * Download a recording from webex and save it to 'savePath'
- * @param {String} fileUrl The webex recording file url from which to start the download procedure
- * @param {String} password The webex recording password
- * @param {String} savePath The file in which to save the recording
+ * Get the nbrshared response for the events
+ * @param {AxiosResponse} res The response from fileUrl
+ * @param {String} password The recording password
  */
-async function getWebexRecording(fileUrl, password, savePath) {
-    let res, url, params;
+async function eventRecordingPassword(res, password) {
+    let url, params;
+    logger.debug('Event recording');
 
-    res = await axios.get(fileUrl);
-    if (/Impossibile trovare la pagina/.test(res.data))
-        throw new Error('Recording has been deleted or isn\'t available at the moment');
+    // Serialize params for recordAction.do
+    params = cheerio.load(res.data)('form')
+        .serialize()
+        .replace(/playbackPasswd=/, `playbackPasswd=${password}`)
+        .replace(/theAction=[a-zA-Z]*/, 'theAction=check_pass')
+        .replace(/accessType=[a-zA-Z]*/, 'accessType=downloadRecording');
+    url = 'https://unifirenze.webex.com/ec3300/eventcenter/recording/recordAction.do';
 
-    //TODO: This only works for mettings. Add downloads for events
+    // Check credentials to recordAction.do
+    logger.debug('Posting to recordAction.do');
+    res = await axios.post(url, params, {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+    });
+    const cookies = getCookies(res.headers['set-cookie']);
+
+    // parse params for viewrecord.do
+    let formId = res.data.match(/[?&]formId=(\d+)/)?.[1],
+        siteurl = res.data.match(/[?&]siteurl=(\w+)/)?.[1],
+        accessType = res.data.match(/[?&]accessType=(\w+)/)?.[1],
+        internalPBRecordTicket = res.data.match(/[?&]internalPBRecordTicket=(\w+)/)?.[1],
+        internalDWRecordTicket = res.data.match(/[?&]internalDWRecordTicket=(\w+)/)?.[1];
+    // Check if params were parsed successfully
+    if (formId === null || siteurl === null || accessType === null || internalPBRecordTicket === null || internalDWRecordTicket === null)
+        throw new Error('Some required parameters couldn\'t be parsed');
+    logger.debug(`├─ formId: ${formId}`);
+    logger.debug(`├─ siteurl: ${siteurl}`);
+    logger.debug(`├─ accessType: ${accessType}`);
+    logger.debug(`├─ iPBRT: ${internalPBRecordTicket}`);
+    logger.debug(`└─ iDWRT: ${internalDWRecordTicket}`);
+
+    // post to viewrecord.do
+    logger.debug('Posting to viewrecord.do');
+    url = 'https://unifirenze.webex.com/ec3300/eventcenter/enroll/viewrecord.do';
+    params = {
+        firstName: 'Anonymous',
+        lastName: 'Anonymous',
+        email: null,
+        siteurl,
+        directview: 1,
+        AT: 'ViewAction',
+        recordId: formId,
+        accessType,
+        internalPBRecordTicket,
+        internalDWRecordTicket
+    };
+    res = await axios.post(url, qs.stringify(params), {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cookie': cookies
+        }
+    });
+
+    // parse params for nbrshared.do
+    let recordKey = res.data.match(/(?:&|\\x3f|\\x26)recordKey(?:=|\\x3d)(\w+)/)?.[1],
+        recordID = res.data.match(/(?:&|\\x3f|\\x26)recordID(?:=|\\x3d)(\d+)/)?.[1],
+        serviceRecordID = res.data.match(/(?:&|\\x3f|\\x26)serviceRecordID(?:=|\\x3d)(\d+)/)?.[1];
+    // Check if params were parsed successfully
+    if (recordKey === null || recordID === null || serviceRecordID === null)
+        throw new Error('Some required parameters couldn\'t be parsed');
+    logger.debug(`├─ recordKey: ${recordKey}`);
+    logger.debug(`├─ recordID: ${recordID}`);
+    logger.debug(`└─ serviceRecordID: ${serviceRecordID}`);
+
+    // post to nbrshared.do
+    logger.debug('Posting to nbrshared.do');
+    url = 'https://unifirenze.webex.com/mw3300/mywebex/nbrshared.do';
+    params = {
+        action: 'publishfile',
+        siteurl: siteurl,
+        recordKey,
+        recordID,
+        serviceRecordID
+    };
+    res = await axios.post(url, qs.stringify(params), {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+    });
+    return res;
+}
+
+/**
+ * Get the nbrshared response for the meetings
+ * @param {AxiosResponse} res The response from fileUrl
+ * @param {String} password The recording password
+ * @param {String} fileUrl The webex recording file url from which the download procedure started
+ */
+async function meetingRecordingPassword(res, password, fileUrl) {
+    logger.debug('Meeting recording');
 
     // Check if password is required
     if (/recordingpasswordcheck\.do/.test(res.data)) {
@@ -73,7 +160,7 @@ async function getWebexRecording(fileUrl, password, savePath) {
         logger.debug('Getting params for recordingpasswordcheck.do');
         const form = cheerio.load(res.data)('form');
         // format params as urlEncoded
-        params = form.serialize().replace(/password=/, `password=${password}`);
+        let params = form.serialize().replace(/password=/, `password=${password}`);
         if (res.data.includes('document.forms[0].firstEntry.value=false;')) { // Don't know the reason.
             params = params.replace('firstEntry=true', 'firstEntry=false');
         }
@@ -90,7 +177,7 @@ async function getWebexRecording(fileUrl, password, savePath) {
         });
 
         // parse params for nbrshared.do in response
-        url = new URL(res.data.match(/href=['"](http.+?nbrshared\.do.+?)['"]/)[1]);
+        let url = new URL(res.data.match(/href=['"](http.+?nbrshared\.do.+?)['"]/)[1]);
 
         // post to nbrshared.do
         logger.debug('Posting to nbrshared.do');
@@ -99,9 +186,31 @@ async function getWebexRecording(fileUrl, password, savePath) {
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
         });
-    } else {
-        logger.debug('No password required');
+        return res;
     }
+
+    // res is alredy the response from nbrShared
+    logger.debug('No password required');
+    return res;
+}
+
+/**
+ * Download a recording from webex and save it to 'savePath'
+ * @param {String} fileUrl The webex recording file url from which to start the download procedure
+ * @param {String} password The webex recording password
+ * @param {String} savePath The file in which to save the recording
+ */
+async function getWebexRecording(fileUrl, password, savePath) {
+    let res, params;
+
+    res = await axios.get(fileUrl);
+    if (/Impossibile trovare la pagina/.test(res.data))
+        throw new Error('Recording has been deleted or isn\'t available at the moment');
+
+    // res is the response from nbrshared
+    res = (/internalRecordTicket/.test(res.data))
+        ? await eventRecordingPassword(res, password)  // Event recording
+        : await meetingRecordingPassword(res, password, fileUrl); // Meeting recording
 
     // parse nbrPrepare.do params
     logger.debug('Parsing nbrPrepare params');

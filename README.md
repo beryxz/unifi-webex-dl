@@ -16,6 +16,10 @@ In alternative the config may be specified using environment variables. Just con
 
 To modify the default log level of 'info', set the env variable `LOG_LEVEL` with one of [winston available log_level](https://github.com/winstonjs/winston#logging-levels).
 
+## Known issues
+
+If you download an event recording that doesn't ask for password, it probably won't work. This case never occurred in my testing. Feel free to open an issue to let me know what happens.
+
 ## How it works
 
 Unfortunately, UniFi Moodle doesn't make use of rest apis. So we have to do a bit of guessing and matching on the response body.
@@ -33,18 +37,20 @@ Get `MoodleSession` cookie from header and in the response body match the first
 Then post the form with the loginToken.
 
 > POST <https://e-l.unifi.it/login/index.php>
+>
 > Content-Type: application/x-www-form-urlencoded
+>
 > Cookie: MoodleSession
 
 The request body should match the following
 
 ```json
 {
-    'anchor': null,
-    'logintoken': 'P1pp0Plu70',
-    'username': 00000,
-    'password': '*****',
-    'rememberusername': 0
+    "anchor": null,
+    "logintoken": "P1pp0Plu70",
+    "username": 00000,
+    "password": "*****",
+    "rememberusername": 0
 }
 ```
 
@@ -53,6 +59,7 @@ Update `MoodleSession` Cookie from Set-Cookie response header.
 Verify that everything is fine.
 
 > GET <https://e-l.unifi.it/login/index.php>
+>
 > Cookie: MoodleSession
 
 If the body doesn't contain `loginerrormessage`, you should be logged in.
@@ -73,6 +80,7 @@ Retrieve the id parameter
 ### Get Webex launch parameters
 
 > GET <https://e-l.unifi.it/mod/lti/launch.php?id=1337>
+>
 > Cookie: MoodleSession
 
 Serialize from the html body all the name attributes in input tags
@@ -80,6 +88,7 @@ Serialize from the html body all the name attributes in input tags
 ### Launch Webex
 
 > POST <https://lti.educonnector.io/launches>
+>
 > Content-Type: application/x-www-form-urlencoded
 
 In the body send the parameters retrieved [from Moodle](#get-webex-launch-parameters)
@@ -123,19 +132,33 @@ The response is an array of objects like the following
 ]
 ```
 
-### Download a recording
+### Download a recording - STEP 1
+
+Before starting, it's important to understand that there are two types of recordings.
+
+There are recordings of `Meetings` and recordings of `Events`.
+
+These two share only the last part of the process.
+
+To start off:
 
 > GET `file_url`
 
-First check if the response contains `'Impossibile trovare la pagina'`, if so, the recording has been deleted or isn't available at the moment.
+1. If the response contains `'Impossibile trovare la pagina'` then the recording has been deleted or isn't available at the moment.
 
-Then check for `recordingpasswordcheck`. If not found, then the recording doesn't need a password and you can skip forward as if you had just made a request to the `matched nbrshared.do url`.
+2. If the response contains `'internalRecordTicket'` then you're downloading an event. Goto [STEP 2b](#download-a-recording---step-2b)
 
-Otherwise, a password is required. Follow the following steps...
+3. If none of the above then you're downloading a meeting. Goto [STEP 2a](#download-a-recording---step-2a)
+
+### Download a recording - STEP 2a
+
+If the response of the previous step doesn't contains `recordingpasswordcheck`, the recording doesn't need a password and you can skip to [STEP 3](#download-a-recording---step-3) as if you alredy made the post request.
+
+Otherwise follow along...
 
 Get all `name` and `values` attributes from the input tags.
 
-You may need to change `firstEntry` to false since in the js it does
+Note that you may need to change `firstEntry` to false since the js does it here:
 
 ```js
 document.forms[0].firstEntry.value=false;
@@ -147,8 +170,79 @@ The body should contain the input attributes from the previous request and the p
 
 Then match `var href='https://unifirenze.webex.com/mw3300/mywebex/nbrshared.do?siteurl=unifirenze-en&action=publishfile&recordID=***&serviceRecordID=***&recordKey=***';`
 
-> POST `matched nbrshared.do url`
+Goto [STEP 3](#download-a-recording---step-3)
+
+### Download a recording - STEP 2b
+
+> Follow the `redirect` of the previous request.
+
+Serialize the form inputs and:
+
+- add password to `playbackPasswd=`
+- change `theAction=...` to `theAction=check_pass`
+- change `accessType=...` to `accessType=downloadRecording`
+
+> POST `https://unifirenze.webex.com/ec3300/eventcenter/recording/recordAction.do`
+>
 > Content-Type: application/x-www-form-urlencoded
+
+Save cookies from response header.
+
+Parse from the response the following fields:
+
+- formId
+- accessType
+- internalPBRecordTicket
+- internalDWRecordTicket
+
+> POST `https://unifirenze.webex.com/ec3300/eventcenter/enroll/viewrecord.do`
+>
+> Content-Type: application/x-www-form-urlencoded
+>
+> Cookie: From previous step
+
+Request body:
+
+```jsonc
+{
+  "firstName": "Anonymous",
+  "lastName": "Anonymous",
+  "siteurl": "unifirenze",
+  "directview": 1,
+  "AT": "ViewAction",
+  "recordId": 0000, // formId of the previous step
+  "accessType": "downloadRecording",
+  "internalPBRecordTicket": "4832534b000000040...",
+  "internalDWRecordTicket": "4832534b00000004f..."
+}
+```
+
+Parse from the response the following fields:
+
+- siteurl
+- recordKey
+- recordID
+- serviceRecordID
+
+[STEP 3](#download-a-recording---step-3)
+
+### Download a recording - STEP 3
+
+> POST `https://unifirenze.webex.com/mw3300/mywebex/nbrshared.do`
+>
+> Content-Type: application/x-www-form-urlencoded
+
+Request body:
+
+```jsonc
+{
+  "action": "publishfile", // always required
+  "siteurl": "unifirenze", // could also be 'unifirenze-en'
+  "recordKey": "***",
+  "recordID": "***",
+  "serviceRecordID": "***",
+}
+```
 
 Match the following part
 
@@ -185,4 +279,4 @@ Check the `status` that could be one of the following [`OKOK`, `Preparing`, `Err
 
 > GET `MultiThreadDownloadServlet`
 
-The response is the `name`.`format` (from the recording object).
+The response is the recording that can be saved as `name`.`format` (from the recording object).
