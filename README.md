@@ -2,6 +2,10 @@
 
 > Download recorded lessons from unifi webex platform passing by the Moodle platform.
 
+## Requirements
+
+- Node.js v14 or newer
+
 ## Quick Start
 
 Install project dependencies: `npm install`
