@@ -19,6 +19,7 @@
   "dependencies": {
     "axios": "^0.20.0",
     "cheerio": "^1.0.0-rc.3",
+    "progress": "^2.0.3",
     "qs": "^6.9.4",
     "winston": "^3.3.3"
   },

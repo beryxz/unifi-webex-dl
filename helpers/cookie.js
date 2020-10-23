@@ -11,7 +11,7 @@ function getCookies(cookieJar) {
 /**
  * Retrieves the MoodleSession cookie from the array if exists. Throw an error otherwise
  * @param {Array} cookies Cookies jar
- * @returns {String} The MoodleSession cookie if found
+ * @returns {string} The MoodleSession cookie if found
  * @throws {Error} If the MoodleSession cookie couldn't be found
  */
 function checkMoodleCookie(cookies) {

@@ -1,9 +1,10 @@
 const config = require('./helpers/config');
 const { loginMoodle, getWebexLaunchOptions } = require('./helpers/moodle');
-const { launchWebex, getWebexRecordings, getWebexRecording } = require('./helpers/webex');
+const { launchWebex, getWebexRecordings, getWebexRecordingUrl } = require('./helpers/webex');
 const logger = require('./helpers/logging')('app');
 const { join } = require('path');
 const { existsSync } = require('fs');
+const { downloadStream } = require('./helpers/download');
 
 (async () => {
     try {
@@ -14,12 +15,11 @@ const { existsSync } = require('fs');
         // login to moodle
         logger.info('Logging into Moodle');
         const moodleSession = await loginMoodle(configs.credentials.username, configs.credentials.password);
-
-        for (const courseId of configs.courses_ids) {
-            logger.info(`Working on course: ${courseId}`);
+        for (const course of configs.courses) {
+            logger.info(`Working on course: ${course.id} - ${course.name}`);
 
             // Launch webex
-            let launchParameters = await getWebexLaunchOptions(moodleSession, courseId);
+            let launchParameters = await getWebexLaunchOptions(moodleSession, course.id);
             if (launchParameters === null) {
                 logger.warn('└─ Webex id not found... Skipping');
             }
@@ -34,14 +34,15 @@ const { existsSync } = require('fs');
             for (let idx = 0; idx < recordings.length; idx++) {
                 const recording = recordings[idx];
                 let filename = `${recording.name}.${recording.format}`.replace(/[\\/:"*?<>| ]/g, '_');
-                let downloadPath = join(configs.base_path, '' + courseId, filename);
+                let downloadPath = join(configs.download.base_path, `${course.name}_${course.id}`, filename);
                 let divider = (idx == recordings.length-1) ? '└' : '├';
 
                 if (!existsSync(downloadPath)) {
                     logger.info(`   ${divider}─ Downloading: ${recording.name}`);
-                    //TODO: Show download status while downloading
                     try {
-                        await getWebexRecording(recording.file_url, recording.password, downloadPath);
+                        // Get download url and when ready, download it
+                        const downloadUrl = await getWebexRecordingUrl(recording.file_url, recording.password);
+                        await downloadStream(downloadUrl, downloadPath, configs.download.progress_bar);
                     } catch (error) {
                         logger.error(`      └─ Skipped because of ${error}`);
                         continue;

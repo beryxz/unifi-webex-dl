@@ -6,9 +6,9 @@ const { checkMoodleCookie } = require('./cookie');
 
 /**
  * Login into Moddle platform and return sessionToken cookie.
- * @param {String} username Moodle username
- * @param {String} password Moodle password
- * @returns {String} Moodle session token cookie
+ * @param {string} username Moodle username
+ * @param {string} password Moodle password
+ * @returns {string} Moodle session token cookie
  */
 async function loginMoodle(username, password) {
     let res, loginToken, cookie;
@@ -56,9 +56,9 @@ async function loginMoodle(username, password) {
 
 /**
  * Extract the webex id from the moodle course page
- * @param {String} sessionToken Moodle session cookie
- * @param {Number} courseId Moodle course id
- * @returns {null|Number} The id if it was found, null otherwise
+ * @param {string} sessionToken Moodle session cookie
+ * @param {number} courseId Moodle course id
+ * @returns {null|number} The id if it was found, null otherwise
  * @throws when axios request wasn't successful
  */
 async function getWebexId(sessionToken, courseId) {
@@ -78,8 +78,8 @@ async function getWebexId(sessionToken, courseId) {
 
 /**
  * Get the required parameters to access the webex page of the webex course extracted from, the moodle page of the given course id.
- * @param {String} sessionToken MoodleSession cookie used to authenticate
- * @param {Number} courseId Course id from which to retrieve webexId and then the relative launch parameters
+ * @param {string} sessionToken MoodleSession cookie used to authenticate
+ * @param {number} courseId Course id from which to retrieve webexId and then the relative launch parameters
  * @return {String|null} Parameters to set in the post request to launch webex. null if webex course id couldn't be found.
  */
 async function getWebexLaunchOptions(sessionToken, courseId) {

@@ -1,8 +1,20 @@
 {
-    "credentials": {
-        "username": "00000",
-        "password": "*****"
+  "credentials": {
+    "username": "00000",
+    "password": "*****"
+  },
+  "download": {
+    "base_path": "./downloads",
+    "progress_bar": true
+  },
+  "courses": [
+    {
+      "name": "Cookie2020",
+      "id": 42
     },
-    "courses_ids": [1, 2, 3],
-    "base_path": "./downloads"
+    {
+      "name": "HackThePlanet",
+      "id": 1337
+    }
+  ]
 }

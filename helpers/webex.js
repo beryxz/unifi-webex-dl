@@ -2,12 +2,12 @@ const axios = require('axios').default;
 const logger = require('./logging')('webex');
 const cheerio = require('cheerio');
 const qs = require('qs');
-const { createWriteStream, unlinkSync } = require('fs');
 const { getCookies } = require('./cookie');
+const { downloadStream } = require('./download');
 
 /**
  * Launch the webex platform and retrieve the JWT and Cookies
- * @param {String} launchParameters urlencoded string to send as post body to access webex
+ * @param {string} launchParameters urlencoded string to send as post body to access webex
  * @returns {Object} { jwt, cookies }
  */
 async function launchWebex(launchParameters) {
@@ -56,7 +56,7 @@ async function getWebexRecordings(webexObject) {
 /**
  * Get the nbrshared response for the events
  * @param {AxiosResponse} res The response from fileUrl
- * @param {String} password The recording password
+ * @param {string} password The recording password
  */
 async function eventRecordingPassword(res, password) {
     let url, params;
@@ -148,8 +148,8 @@ async function eventRecordingPassword(res, password) {
 /**
  * Get the nbrshared response for the meetings
  * @param {AxiosResponse} res The response from fileUrl
- * @param {String} password The recording password
- * @param {String} fileUrl The webex recording file url from which the download procedure started
+ * @param {string} password The recording password
+ * @param {string} fileUrl The webex recording file url from which the download procedure started
  */
 async function meetingRecordingPassword(res, password, fileUrl) {
     logger.debug('Meeting recording');
@@ -196,11 +196,10 @@ async function meetingRecordingPassword(res, password, fileUrl) {
 
 /**
  * Download a recording from webex and save it to 'savePath'
- * @param {String} fileUrl The webex recording file url from which to start the download procedure
- * @param {String} password The webex recording password
- * @param {String} savePath The file in which to save the recording
+ * @param {string} fileUrl The webex recording file url from which to start the download procedure
+ * @param {string} password The webex recording password
  */
-async function getWebexRecording(fileUrl, password, savePath) {
+async function getWebexRecordingUrl(fileUrl, password) {
     let res, params;
 
     res = await axios.get(fileUrl);
@@ -253,22 +252,8 @@ async function getWebexRecording(fileUrl, password, savePath) {
         // 'status' case switch
         if (params.status === 'OKOK') {
             // Write to file
-            logger.debug('Recording ready, downloading...');
-            try {
-                let writer = createWriteStream(savePath);
-                res = await axios.get(downloadUrl + params.ticket, {
-                    responseType: 'stream'
-                });
-                res.data.pipe(writer);
-
-                return new Promise((resolve, reject) => {
-                    writer.on('finish', resolve);
-                    writer.on('error', reject);
-                });
-            } catch (error) {
-                // Delete created file
-                unlinkSync(savePath);
-            }
+            logger.debug('Recording ready');
+            return downloadUrl + params.ticket;
         }
 
         logger.debug('Recording not ready, waiting 3s...');
@@ -277,5 +262,5 @@ async function getWebexRecording(fileUrl, password, savePath) {
 }
 
 module.exports = {
-    launchWebex, getWebexRecordings, getWebexRecording
+    launchWebex, getWebexRecordings, getWebexRecordingUrl
 };
