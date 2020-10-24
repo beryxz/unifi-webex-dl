@@ -5,6 +5,7 @@ const logger = require('./helpers/logging')('app');
 const { join } = require('path');
 const { existsSync } = require('fs');
 const { downloadStream } = require('./helpers/download');
+const { createLogger } = require('winston');
 
 (async () => {
     try {
@@ -19,15 +20,29 @@ const { downloadStream } = require('./helpers/download');
             logger.info(`Working on course: ${course.id} - ${course.name}`);
 
             // Launch webex
-            let launchParameters = await getWebexLaunchOptions(moodleSession, course.id);
+            const launchParameters = await getWebexLaunchOptions(moodleSession, course.id);
             if (launchParameters === null) {
                 logger.warn('└─ Webex id not found... Skipping');
             }
-            let webexObject = await launchWebex(launchParameters);
+            const webexObject = await launchWebex(launchParameters);
 
             // Get recordings
-            let recordings = await getWebexRecordings(webexObject);
-            logger.info(`└─ Found ${recordings.length} recordings`);
+            const recordingsAll = await getWebexRecordings(webexObject);
+            // Filter recordings
+            const recordings = recordingsAll.filter(rec => {
+                try {
+                    let createdAt = new Date(rec.created_at).getTime();
+                    return !(
+                        (course.skip_before_date && new Date(course.skip_before_date) > createdAt) ||
+                        (course.skip_after_date && new Date(course.skip_after_date) < createdAt) ||
+                        (course.skip_names && RegExp(course.skip_names).test(rec.name))
+                    );
+                } catch (err) {
+                    return true;
+                }
+            });
+
+            logger.info(`└─ Found ${recordingsAll.length} recordings (${recordingsAll.length - recordings.length} filtered)`);
 
             // Get all not alredy downloaded recordings
             //TODO: implement multiple downloads at once
@@ -35,10 +50,9 @@ const { downloadStream } = require('./helpers/download');
                 const recording = recordings[idx];
                 let filename = `${recording.name}.${recording.format}`.replace(/[\\/:"*?<>| ]/g, '_');
                 let downloadPath = join(configs.download.base_path, `${course.name}_${course.id}`, filename);
-                let divider = (idx == recordings.length-1) ? '└' : '├';
 
                 if (!existsSync(downloadPath)) {
-                    logger.info(`   ${divider}─ Downloading: ${recording.name}`);
+                    logger.info(`   └─ Downloading: ${recording.name}`);
                     try {
                         // Get download url and when ready, download it
                         const downloadUrl = await getWebexRecordingUrl(recording.file_url, recording.password);
@@ -47,8 +61,8 @@ const { downloadStream } = require('./helpers/download');
                         logger.error(`      └─ Skipped because of ${error}`);
                         continue;
                     }
-                } else {
-                    logger.info(`   ${divider}─ Alredy exists: ${recording.name}`);
+                } else if (configs.download.show_existing) {
+                    logger.info(`   └─ Alredy exists: ${recording.name}`);
                 }
             }
         }

@@ -3,7 +3,7 @@ const { existsSync, access, readFileSync, mkdir } = require('fs');
 const logger = require('./logging')('config');
 
 /**
- * Check wheter the given object is undefined, null, empty string or empty object
+ * Check whether the given object is undefined, null, empty string or empty object
  * @param {any} object to entity to check
  */
 function isNone(object) {
@@ -80,13 +80,14 @@ async function load(configPath) {
     let username = process.env['CREDENTIALS__USERNAME'] || config.credentials?.username,
         password = process.env['CREDENTIALS__PASSWORD'] || config.credentials?.password,
         base_path = (process.env['DOWNLOAD__BASE_PATH']) || config.download?.base_path,
-        progress_bar = (process.env['DOWNLOAD__PROGRESS_BAR']) || config.download?.progress_bar,
+        progress_bar = ((process.env['DOWNLOAD__PROGRESS_BAR']) || config.download?.progress_bar) ?? true,
+        show_existing = ((process.env['DOWNLOAD__SHOW_EXISTING']) || config.download?.show_existing) ?? true,
         courses;
 
     // Work on course objects
-    if (process.env['COURSES_IDS']) {
+    if (process.env['COURSES']) {
         // 123000=Course1,234000=Course2 ...
-        process.env['COURSES_IDS']
+        process.env['COURSES']
             .split(',')
             .map(c => c.split('='))
             .map(c => { return { id: c[0], name: c[1] }; });
@@ -109,8 +110,15 @@ async function load(configPath) {
     }
 
     return {
-        credentials: { username, password },
-        download: { base_path, progress_bar: !!progress_bar },
+        credentials: {
+            username,
+            password
+        },
+        download: {
+            base_path,
+            progress_bar: !!progress_bar,
+            show_existing: !!show_existing
+        },
         courses
     };
 }

@@ -2,6 +2,7 @@ const logger = require('./logging')('download');
 const ProgressBar = require('progress');
 const { createWriteStream, unlinkSync } = require('fs');
 const axios = require('axios').default;
+const bytes = require('bytes');
 
 /**
  * Download a stream file from an url to a file
@@ -16,14 +17,14 @@ async function downloadStream(url, savePath, progressBar = true) {
         });
 
         if (progressBar) {
-            const totalLength = headers['content-length'];
-            const progressBar = new ProgressBar(' [:bar] :percent :etas', {
-                width: 30,
+            const filesize = headers['content-length'];
+            const progressBar = new ProgressBar(`${bytes(parseInt(filesize))} > [:bar] :percent :etas`, {
+                width: 20,
                 complete: '=',
                 incomplete: ' ',
                 renderThrottle: 100,
                 clear: true,
-                total: parseInt(totalLength)
+                total: parseInt(filesize)
             });
             data.on('data', (chunk) => progressBar.tick(chunk.length));
         }
