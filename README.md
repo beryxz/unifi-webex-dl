@@ -16,7 +16,42 @@ Run the app with: `npm start`
 
 ## Config
 
-In alternative the config may be specified using environment variables. Just convert the config names to uppercase.
+> The config file has 3 sections.
+
+### Credentials
+
+- `username`: used for authenticating to the Moodle Platform.
+- `password`: used for authenticating to the Moodle Platform.
+
+### Download
+
+- `base_path`: path in which to download recordings
+- `progress_bar`: (Optional) boolean to set whether or not to show a progress bar while downloading the recordings. Defaults to `true`
+- `show_existing`: (Optional) boolean to set whether or not to show already downloaded recordings. Defaults to `true`
+
+### Courses
+
+> Array of objects, one for each course. The object contains:
+
+- `id`: id of the course shown in the url bar of Moodle
+- `name`: prepended to the folder name and also shown in the logs
+- `skip_names`: (Optional) regex to match recordings names to skip. Exclude slashes and flags from strings. E.g. `'test'` and NOT `'/test/i'`
+- `skip_before_date`: (Optional) skip recordings before the date `YYYY-MM-DD`
+- `skip_after_date`: (Optional) skip recordings after the date `YYYY-MM-DD`
+
+## Environment variables
+
+The app tries to be as docker friendly as possible.
+
+In alternative the configs may be specified using environment variables. Just convert the config names to uppercase. In case of nested properties, separe them with two underscores.
+
+E.g. `credentials.username` => `CREDENTIALS__USERNAME`; `download.base_path` => `DOWNLOAD__BASE_PATH`
+
+Courses can also be specified throught the `COURSES` env variable using the following format although limited to only `id` and `name`:
+
+`COURSE_ID=COURSE_NAME,12003=WhiteRabbit`
+
+## Logging
 
 To modify the default log level of 'info', set the env variable `LOG_LEVEL` with one of [winston available log_level](https://github.com/winstonjs/winston#logging-levels).
 
@@ -120,18 +155,18 @@ The response is an array of objects like the following
 ```json
 [
     {
-        "created_at": "",
+        "created_at": "2020-01-13T00:00:00.000-07:00",
         "duration_hour": 0,
         "duration_min": 0,
         "duration_sec": 0,
         "file_url": "https://unifirenze.webex.com/unifirenze/lsr.php?RCID=******",
-        "format": "",
+        "format": "MP4",
         "id": 0,
         "name": "",
         "password": "",
         "recording_url": "https://unifirenze.webex.com/unifirenze/ldr.php?RCID=******",
-        "timezone": "",
-        "updated_at": ""
+        "timezone": "Europe/Rome",
+        "updated_at": "2020-01-13T00:00:00.000-07:00"
     }
 ]
 ```
