@@ -3,7 +3,6 @@ const logger = require('./logging')('webex');
 const cheerio = require('cheerio');
 const qs = require('qs');
 const { getCookies } = require('./cookie');
-const { downloadStream } = require('./download');
 
 /**
  * Launch the webex platform and retrieve the JWT and Cookies

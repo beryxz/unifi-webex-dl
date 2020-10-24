@@ -5,7 +5,6 @@ const logger = require('./helpers/logging')('app');
 const { join } = require('path');
 const { existsSync } = require('fs');
 const { downloadStream } = require('./helpers/download');
-const { createLogger } = require('winston');
 
 (async () => {
     try {
