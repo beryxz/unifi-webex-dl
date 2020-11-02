@@ -1,5 +1,4 @@
-const { join } = require('path');
-const { existsSync, access, readFileSync, mkdir } = require('fs');
+const { existsSync, readFileSync } = require('fs');
 const logger = require('./logging')('config');
 
 /**
@@ -30,33 +29,7 @@ function checkCourses(courses) {
     for (const c of courses) {
         if (isNone(c.id))
             throw new Error('Invalid config file. A course is missing the \'id\'');
-        if (isNone(c.name))
-            throw new Error('Invalid config file. A course is missing the \'name\'');
     }
-}
-
-/**
- * Asynchronously make the dir path if it doesn't exists
- * @param {string} dir_path The path to the dir
- * @returns {Promise}
- */
-function mkdirIfNotExists(dir_path) {
-    return new Promise((resolve, reject) => {
-        // try to access
-        access(dir_path, (err) => {
-            if (err && err.code === 'ENOENT') {
-                // dir doesn't exist, creating it
-                mkdir(dir_path, { recursive: true }, (err) => {
-                    if (err)
-                        reject(`Error creating directory. ${err.code}`);
-                    resolve();
-                });
-            }
-
-            // dir exists
-            resolve();
-        });
-    });
 }
 
 /**
@@ -98,16 +71,6 @@ async function load(configPath) {
     // check for all required configs
     checkConfigs({username, password, base_path});
     checkCourses(courses);
-
-    // create courses paths as 'name_id'
-    try {
-        logger.debug('Checking folder structure');
-        await Promise.all(courses
-            .map(c => `${c.name}_${c.id}`)
-            .map(name => mkdirIfNotExists(join(base_path, ''+name))));
-    } catch (err) {
-        throw new Error(`Error creating folder structure. ${err.message}`);
-    }
 
     return {
         credentials: {

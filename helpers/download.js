@@ -1,8 +1,32 @@
 const logger = require('./logging')('download');
 const ProgressBar = require('progress');
-const { createWriteStream, unlinkSync } = require('fs');
+const { access, createWriteStream, mkdir, unlinkSync } = require('fs');
 const axios = require('axios').default;
 const bytes = require('bytes');
+
+/**
+ * Asynchronously make the dir path if it doesn't exists
+ * @param {string} dir_path The path to the dir
+ * @returns {Promise}
+ */
+function mkdirIfNotExists(dir_path) {
+    return new Promise((resolve, reject) => {
+        // try to access
+        access(dir_path, (err) => {
+            if (err && err.code === 'ENOENT') {
+                // dir doesn't exist, creating it
+                mkdir(dir_path, { recursive: true }, (err) => {
+                    if (err)
+                        reject(`Error creating directory. ${err.code}`);
+                    resolve();
+                });
+            }
+
+            // dir exists
+            resolve();
+        });
+    });
+}
 
 /**
  * Download a stream file from an url to a file
@@ -37,7 +61,7 @@ async function downloadStream(url, savePath, progressBar = true) {
             writer.on('error', reject);
         }));
     } catch (err) {
-        logger.error('Error while downloading file');
+        logger.error(`Error while downloading file: ${err}`);
 
         // Delete created file
         unlinkSync(savePath);
@@ -45,5 +69,6 @@ async function downloadStream(url, savePath, progressBar = true) {
 }
 
 module.exports = {
-    downloadStream
+    downloadStream,
+    mkdirIfNotExists
 };
