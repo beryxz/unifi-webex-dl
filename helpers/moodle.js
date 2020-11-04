@@ -55,6 +55,27 @@ async function loginMoodle(username, password) {
 }
 
 /**
+ * Extract the course name from the moodle course page
+ * @param {string} sessionToken Moodle session cookie
+ * @param {number} courseId Moodle course id
+ * @returns {String|null} The course name if it was found, null otherwise
+ * @throws when axios request wasn't successful
+ */
+async function getCourseName(sessionToken, courseId) {
+    const res = await axios.get('https://e-l.unifi.it/course/view.php', {
+        params: {
+            id: courseId
+        },
+        headers: {
+            'Cookie': sessionToken
+        }
+    });
+
+    // Match the course name
+    return cheerio.load(res.data)('h1').text();
+}
+
+/**
  * Extract the webex id from the moodle course page
  * @param {string} sessionToken Moodle session cookie
  * @param {number} courseId Moodle course id
@@ -108,5 +129,5 @@ async function getWebexLaunchOptions(sessionToken, courseId) {
 }
 
 module.exports = {
-    loginMoodle, getWebexLaunchOptions
+    loginMoodle, getCourseName, getWebexLaunchOptions
 };

@@ -1,10 +1,10 @@
 const config = require('./helpers/config');
-const { loginMoodle, getWebexLaunchOptions } = require('./helpers/moodle');
+const { loginMoodle, getCourseName, getWebexLaunchOptions } = require('./helpers/moodle');
 const { launchWebex, getWebexRecordings, getWebexRecordingUrl } = require('./helpers/webex');
 const logger = require('./helpers/logging')('app');
 const { join } = require('path');
 const { existsSync } = require('fs');
-const { downloadStream } = require('./helpers/download');
+const { downloadStream, mkdirIfNotExists } = require('./helpers/download');
 
 (async () => {
     try {
@@ -16,7 +16,14 @@ const { downloadStream } = require('./helpers/download');
         logger.info('Logging into Moodle');
         const moodleSession = await loginMoodle(configs.credentials.username, configs.credentials.password);
         for (const course of configs.courses) {
-            logger.info(`Working on course: ${course.id} - ${course.name}`);
+            const courseNameUnspecified = !course.name;
+            logger.info(`Working on course: ${course.id}${courseNameUnspecified ? '' : ' - ' + course.name}`);
+
+            // Get course name if unspecified
+            if (!course.name) {
+                course.name = await getCourseName(moodleSession, course.id);
+                logger.info(`Got course name: ${course.name}`);
+            }
 
             // Launch webex
             const launchParameters = await getWebexLaunchOptions(moodleSession, course.id);
@@ -43,13 +50,22 @@ const { downloadStream } = require('./helpers/download');
 
             logger.info(`└─ Found ${recordingsAll.length} recordings (${recordingsAll.length - recordings.length} filtered)`);
 
-            // Get all not alredy downloaded recordings
+            // Get all not already downloaded recordings
             //TODO: implement multiple downloads at once
             for (let idx = 0; idx < recordings.length; idx++) {
                 const recording = recordings[idx];
                 let filename = `${recording.name}.${recording.format}`.replace(/[\\/:"*?<>| ]/g, '_');
-                let downloadPath = join(configs.download.base_path, `${course.name}_${course.id}`, filename);
-
+                let folderPath = join(
+                    configs.download.base_path,
+                    courseNameUnspecified ? course.name : `${course.name}_${course.id}`
+                );
+                let downloadPath = join(folderPath, filename);
+                
+                try {
+                    await mkdirIfNotExists(folderPath);
+                } catch (err) {
+                    throw new Error(`Error while creating folder structure: ${err.message}`);
+                }
                 if (!existsSync(downloadPath)) {
                     logger.info(`   └─ Downloading: ${recording.name}`);
                     try {
