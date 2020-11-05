@@ -194,15 +194,18 @@ async function meetingRecordingPassword(res, password, fileUrl) {
 }
 
 /**
- * Download a recording from webex and save it to 'savePath'
+ * Given a file_url of a recording, gets the URL for downloading the recording
+ * of Meetings or Events that have webex download feature enabled.
  * @param {string} fileUrl The webex recording file url from which to start the download procedure
  * @param {string} password The webex recording password
+ * @throws {Error} If an error occurred.
+ * @return {string} The url from which to download the recording
  */
-async function getWebexRecordingUrl(fileUrl, password) {
+async function getWebexRecordingDownloadUrl(fileUrl, password) {
     let res, params;
 
     res = await axios.get(fileUrl);
-    if (/Impossibile trovare la pagina/.test(res.data))
+    if (/Error/.test(res.data))
         throw new Error('Recording has been deleted or isn\'t available at the moment');
 
     // res is the response from nbrshared
@@ -260,6 +263,79 @@ async function getWebexRecordingUrl(fileUrl, password) {
     }
 }
 
+/**
+ * Given a recording_url retrieves the stream options.
+ * Stream options contains parameters required for download hls playlist and more.
+ * @param {string} recording_url The recording_url of the recording object
+ * @param {string} password The password of the recording
+ * @throws {Error} if some requests fails
+ * @returns {object} the stream options
+ */
+async function recordingStreamOptions(recording_url, password) {
+    // get recordingId
+    let res = await axios.get(recording_url);
+    if (/Error/.test(res.data))
+        throw new Error('Recording has been deleted or isn\'t available at the moment');
+
+    let recordingId = res.data.match(/location.href.+?https:\/\/unifirenze\.webex.+?playback\/([a-zA-Z0-9]+)/)?.[1];
+    if (recordingId === null)
+        throw new Error('Couldn\'t match recordingId');
+
+    // get stream options
+    res = await axios.get(`https://unifirenze.webex.com/webappng/api/v1/recordings/${recordingId}/stream?siteurl=unifirenze`, {
+        headers: {
+            accessPwd: password
+        }
+    });
+    if (!res.data?.mp4StreamOption)
+        throw new Error('Invalid response. No stream options');
+
+    return res.data;
+}
+
+/**
+ * Given a recording_url of a recording, retrieves url of the hls playlist used for streaming the recording.
+ * @param {string} recording_url The recording_url of the recording
+ * @param {string} password The password of the recording
+ * @throws {Error} if some requests fails
+ * @returns {object} { playlistUrl, filesize }
+ */
+async function getWebexRecordingHSLPlaylist(recording_url, password) {
+    //TODO: implement the process for recordings of Events with disabled download
+
+    // get mp4StreamOption
+    logger.debug('Getting stream options');
+    const streamOptions = await recordingStreamOptions(recording_url, password);
+    if (!streamOptions?.mp4StreamOption)
+        throw new Error('Invalid recording stream options');
+    let mp4StreamOption = streamOptions.mp4StreamOption;
+
+    // get playlist filename
+    logger.debug('Getting playlist filename');
+    let res = await axios({
+        method: 'post',
+        url: 'https://nln1vss.webex.com/apis/html5-pipeline.do',
+        params: {
+            recordingDir: mp4StreamOption.recordingDir,
+            timestamp: mp4StreamOption.timestamp,
+            token: mp4StreamOption.token,
+            xmlName: mp4StreamOption.xmlName
+        }
+    });
+    let playlistFilename = res.data.match(/<Sequence.+?>(.+?)<\/Sequence>/)?.[1];
+    if (playlistFilename === null)
+        throw new Error('Recording file not found');
+
+    let playlistUrl = `https://nln1vss.webex.com/hls-vod/recordingDir/${mp4StreamOption.recordingDir}/timestamp/${mp4StreamOption.timestamp}/token/${mp4StreamOption.token}/fileName/${playlistFilename}.m3u8`;
+    let filesize = (streamOptions.fileSize ?? 0) + (streamOptions.mediaDetectInfo?.audioSize ?? 0);
+    logger.debug(`└─ playlistUrl: ${playlistUrl}`);
+    logger.debug(`└─ filesize: ${filesize}`);
+    return { playlistUrl, filesize };
+}
+
 module.exports = {
-    launchWebex, getWebexRecordings, getWebexRecordingUrl
+    launchWebex,
+    getWebexRecordings,
+    getWebexRecordingDownloadUrl,
+    getWebexRecordingHSLPlaylist
 };
