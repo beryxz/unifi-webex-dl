@@ -41,7 +41,10 @@ function mkdirIfNotExists(dir_path) {
 async function downloadStream(url, savePath, showProgressBar = true) {
     try {
         const { data, headers } = await axios.get(url, {
-            responseType: 'stream'
+            responseType: 'stream',
+            headers: {
+                'User-Agent': 'Mozilla/5.0'
+            }
         });
 
         if (showProgressBar) {

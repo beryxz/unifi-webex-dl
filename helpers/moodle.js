@@ -15,7 +15,7 @@ async function loginMoodle(username, password) {
 
     // get loginToken
     logger.debug('Loading login');
-    res = await axios.get('https://e-l.unifi.it/login/index.php');
+    res = await axios.get('https://e-l.unifi.it/login/index.php', { headers: { 'User-Agent': 'Mozilla/5.0' } });
     loginToken = res.data.match(/logintoken" value="(.+?)"/)[1];
     cookie = checkMoodleCookie(res.headers['set-cookie']);
     logger.debug(`├─ Cookie: ${cookie}`);
@@ -32,7 +32,8 @@ async function loginMoodle(username, password) {
     }), {
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'Cookie': cookie
+            'Cookie': cookie,
+            'User-Agent': 'Mozilla/5.0'
         },
         maxRedirects: 0,
         validateStatus: status => status >= 200 && status < 300 || status === 303
@@ -44,7 +45,8 @@ async function loginMoodle(username, password) {
     logger.debug('Checking credentials');
     res = await axios.get('https://e-l.unifi.it/login/index.php', {
         headers: {
-            'Cookie': cookie
+            'Cookie': cookie,
+            'User-Agent': 'Mozilla/5.0'
         }
     });
     if (res.data.match(/loginerrormessage/) !== null) {
@@ -67,7 +69,8 @@ async function getCourseName(sessionToken, courseId) {
             id: courseId
         },
         headers: {
-            'Cookie': sessionToken
+            'Cookie': sessionToken,
+            'User-Agent': 'Mozilla/5.0'
         }
     });
 
@@ -88,7 +91,8 @@ async function getWebexId(sessionToken, courseId) {
             id: courseId
         },
         headers: {
-            'Cookie': sessionToken
+            'Cookie': sessionToken,
+            'User-Agent': 'Mozilla/5.0'
         }
     });
 
@@ -117,7 +121,8 @@ async function getWebexLaunchOptions(sessionToken, courseId) {
                 id: webexId
             },
             headers: {
-                'Cookie': sessionToken
+                'Cookie': sessionToken,
+                'User-Agent': 'Mozilla/5.0'
             }
         });
 

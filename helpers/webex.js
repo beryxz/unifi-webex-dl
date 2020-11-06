@@ -14,7 +14,8 @@ async function launchWebex(launchParameters) {
         logger.debug('Launching Webex');
         const res = await axios.post('https://lti.educonnector.io/launches', launchParameters, {
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'Mozilla/5.0'
             }
         });
 
@@ -45,7 +46,8 @@ async function getWebexRecordings(webexObject) {
     const res = await axios.get('https://lti.educonnector.io/api/webex/recordings', {
         headers: {
             'Authorization': `Bearer ${webexObject.jwt}`,
-            'Cookie': webexObject.cookies
+            'Cookie': webexObject.cookies,
+            'User-Agent': 'Mozilla/5.0'
         }
     });
 
@@ -73,7 +75,8 @@ async function eventRecordingPassword(res, password) {
     logger.debug('Posting to recordAction.do');
     res = await axios.post(url, params, {
         headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'Mozilla/5.0'
         }
     });
     const cookies = getCookies(res.headers['set-cookie']);
@@ -111,7 +114,8 @@ async function eventRecordingPassword(res, password) {
     res = await axios.post(url, qs.stringify(params), {
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'Cookie': cookies
+            'Cookie': cookies,
+            'User-Agent': 'Mozilla/5.0'
         }
     });
 
@@ -138,7 +142,8 @@ async function eventRecordingPassword(res, password) {
     };
     res = await axios.post(url, qs.stringify(params), {
         headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'Mozilla/5.0'
         }
     });
     return res;
@@ -171,7 +176,8 @@ async function meetingRecordingPassword(res, password, fileUrl) {
         logger.debug('Checking params with recordingpasswordcheck.do');
         res = await axios.post(actionUrl.toString(), params, {
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'Mozilla/5.0'
             },
         });
 
@@ -182,7 +188,8 @@ async function meetingRecordingPassword(res, password, fileUrl) {
         logger.debug('Posting to nbrshared.do');
         res = await axios.post(url.origin + url.pathname, url.search.substring(1), {
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'Mozilla/5.0'
             }
         });
         return res;
@@ -204,7 +211,7 @@ async function meetingRecordingPassword(res, password, fileUrl) {
 async function getWebexRecordingDownloadUrl(fileUrl, password) {
     let res, params;
 
-    res = await axios.get(fileUrl);
+    res = await axios.get(fileUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
     if (/Error/.test(res.data))
         throw new Error('Recording has been deleted or isn\'t available at the moment');
 
@@ -237,6 +244,9 @@ async function getWebexRecordingDownloadUrl(fileUrl, password) {
         // get nbrPrepare.do
         logger.debug('Checking recording status nbrPrepare.do');
         res = await axios.get('https://unifirenze.webex.com/mw3300/mywebex/nbrPrepare.do', {
+            headers: {
+                'User-Agent': 'Mozilla/5.0'
+            },
             params: {
                 siteurl: 'unifirenze',
                 ...params
@@ -284,7 +294,8 @@ async function recordingStreamOptions(recording_url, password) {
     // get stream options
     res = await axios.get(`https://unifirenze.webex.com/webappng/api/v1/recordings/${recordingId}/stream?siteurl=unifirenze`, {
         headers: {
-            accessPwd: password
+            accessPwd: password,
+            'User-Agent': 'Mozilla/5.0'
         }
     });
     if (!res.data?.mp4StreamOption)
@@ -315,6 +326,9 @@ async function getWebexRecordingHSLPlaylist(recording_url, password) {
     let res = await axios({
         method: 'post',
         url: 'https://nln1vss.webex.com/apis/html5-pipeline.do',
+        headers: {
+            'User-Agent': 'Mozilla/5.0'
+        },
         params: {
             recordingDir: mp4StreamOption.recordingDir,
             timestamp: mp4StreamOption.timestamp,
