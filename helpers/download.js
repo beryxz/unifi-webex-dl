@@ -127,7 +127,7 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
                 });
                 stream.on('error', async (err) => {
                     progressBar.terminate();
-                    logger.warning(`Retrying because of: ${err.message}.`);
+                    logger.warn(`Retrying because of: ${err.message}.`);
                     if (retry < RETRY_COUNT) {
                         retry++;
                         await new Promise(r => setTimeout(r, 3000));
