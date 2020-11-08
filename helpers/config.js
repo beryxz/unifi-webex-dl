@@ -60,7 +60,7 @@ async function load(configPath) {
     // Work on course objects
     if (process.env['COURSES']) {
         // 123000=Course1,234000=Course2 ...
-        process.env['COURSES']
+        courses = process.env['COURSES']
             .split(',')
             .map(c => c.split('='))
             .map(c => { return { id: c[0], name: c[1] }; });
