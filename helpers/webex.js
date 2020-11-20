@@ -351,5 +351,6 @@ module.exports = {
     launchWebex,
     getWebexRecordings,
     getWebexRecordingDownloadUrl,
-    getWebexRecordingHSLPlaylist
+    getWebexRecordingHSLPlaylist,
+    recordingStreamOptions
 };
