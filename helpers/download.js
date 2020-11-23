@@ -3,10 +3,9 @@ const ProgressBar = require('progress');
 const { access, createWriteStream, mkdir, unlinkSync, unlink } = require('fs');
 const axios = require('axios').default;
 const bytes = require('bytes');
-const m3u8stream = require('m3u8stream');
+const url = require('url');
 
 const RETRY_COUNT = 5;
-
 
 /**
  * Asynchronously make the dir path if it doesn't exists
@@ -76,6 +75,20 @@ async function downloadStream(url, savePath, showProgressBar = true) {
 }
 
 /**
+ * Get all seggments of a playlist URL
+ * @param {string} playlistUrl The url from which to retrieve the m3u8 playlist file
+ */
+async function parsePlaylistSegments(playlistUrl) {
+    const res = await axios.get(playlistUrl, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0'
+        }
+    });
+
+    return res.data.split(/[\r\n]+/).filter(row => !row.startsWith('#'));
+}
+
+/**
  *
  * @param {string} playlistUrl The HLS m3u8 playlist file url
  * @param {string} savePath Existing path to which to save the stream
@@ -83,7 +96,8 @@ async function downloadStream(url, savePath, showProgressBar = true) {
  * @param {boolean} progressBar Whether to show a progress bar of the download
  */
 async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgressBar = true) {
-    let progressBar;
+    let progressBar, fileStream;
+
     if (showProgressBar) {
         progressBar = new ProgressBar(`${bytes(parseInt(filesize))} > [:bar] :percent :etas`, {
             width: 40,
@@ -95,52 +109,70 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
         });
     }
 
-    // Download the hls stream using external library.
+    // Download the hls stream
     try {
-        // In case of failure retry up to 3 times
-        let success = false, retry = 0;
-        do {
-            logger.debug('Initializing downloader');
-            let stream = m3u8stream(playlistUrl, {
-                requestOptions: {
-                    maxRetries: RETRY_COUNT
-                }
-            });
+        const segments = await parsePlaylistSegments(playlistUrl);
+        const totSegments = segments.length;
 
-            // stream where to save recording
-            stream.pipe(createWriteStream(savePath));
+        // stream where to save recording
+        fileStream = createWriteStream(savePath);
 
-            // progress is called after the segment finished downloading
-            stream.on('progress', (segment, totSegments, bytesDownloaded) => {
-                progressBar.update(segment.num/totSegments);
-                if (segment.num === totSegments) stream.emit('done');
-            });
-            stream.on('retry', (retryCount) => {
-                logger.debug(`Try num: ${retryCount}`);
-            });
+        // progress is called after the segment finished downloading
+        fileStream.on('progress', ({segment, totSegments}) => {
+            progressBar.update(segment/totSegments);
+        });
 
-            // Await the end of the download
-            await (new Promise((resolve, reject) => {
-                stream.on('done', () => {
+        // download each segment
+        let segmentNum = 1;
+        for (const segmentUrl of segments) {
+            let success = false;
+            let retryCount = 0;
+            do {
+                try {
+                    // download segment
+                    const { data } = await axios.get(url.resolve(playlistUrl, segmentUrl), {
+                        responseType: 'stream',
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0'
+                        }
+                    });
+
+                    // wait for segment to download
+                    data.pipe(fileStream, { end: false });
+                    await new Promise((resolve) => {
+                        data.on('end', () => {
+                            resolve();
+                        });
+                    });
+
+                    // empit status update
+                    fileStream.emit('progress', {
+                        segment: segmentNum + 1,
+                        totSegments: totSegments
+                    });
+
+                    segmentNum++;
                     success = true;
-                    resolve();
-                });
-                stream.on('error', async (err) => {
-                    progressBar.terminate();
-                    logger.warn(`Retrying because of: ${err.message}.`);
-                    if (retry < RETRY_COUNT) {
-                        retry++;
-                        await new Promise(r => setTimeout(r, 3000));
-                        resolve();
+                } catch (error) {
+                    // tries up to 'RETRY_COUNT' times
+                    if (retryCount < RETRY_COUNT) {
+                        retryCount++;
+                        logger.debug('Segment failed, retrying...');
+                        await new Promise(r => setTimeout(r, 1000));
+                    } else {
+                        throw new Error('Segment failed downloading');
                     }
-                    else reject(err);
-                });
-            }));
-        } while (!success);
+                }
+            } while (!success);
+        }
+
+        // close stream
+        fileStream.end();
     } catch (err) {
         progressBar.terminate();
         logger.error(`Error while downloading file: ${err.message}`);
         await unlink(savePath, () => {});
+        fileStream?.end();
         throw new Error(err);
     }
 }

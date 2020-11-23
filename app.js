@@ -51,7 +51,6 @@ const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists } = require('./hel
             logger.info(`└─ Found ${recordingsAll.length} recordings (${recordingsAll.length - recordings.length} filtered)`);
 
             // Get all not already downloaded recordings
-            //TODO: implement multiple downloads at once
             for (let idx = 0; idx < recordings.length; idx++) {
                 const recording = recordings[idx];
 
@@ -74,11 +73,11 @@ const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists } = require('./hel
                     try {
                         // Try to use webex download feature and if it fails, fallback to hls stream feature
                         try {
-                            logger.debug('      Trying download feature');
+                            logger.debug('      └─ Trying download feature');
                             const downloadUrl = await getWebexRecordingDownloadUrl(recording.file_url, recording.password);
                             await downloadStream(downloadUrl, downloadPath, configs.download.progress_bar);
                         } catch {
-                            logger.debug('      Trying HLS');
+                            logger.info('      └─ Trying downloading stream (may be slower)');
                             const { playlistUrl, filesize } = await getWebexRecordingHSLPlaylist(recording.recording_url, recording.password);
                             await downloadHLSPlaylist(playlistUrl, downloadPath, filesize, configs.download.progress_bar);
                         }
