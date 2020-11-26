@@ -3,7 +3,7 @@ const { loginMoodle, getCourseName, getWebexLaunchOptions } = require('./helpers
 const { launchWebex, getWebexRecordings, getWebexRecordingDownloadUrl, getWebexRecordingHSLPlaylist } = require('./helpers/webex');
 const logger = require('./helpers/logging')('app');
 const { join } = require('path');
-const { existsSync } = require('fs');
+const { existsSync, renameSync, rmdirSync } = require('fs');
 const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists } = require('./helpers/download');
 const { getUTCDateTimestamp } = require('./helpers/date');
 
@@ -12,6 +12,15 @@ const { getUTCDateTimestamp } = require('./helpers/date');
         // get moodle credentials and courses ids
         logger.info('Loading configs');
         let configs = await config.load('./config.json');
+
+        // tmp folder for downloads
+        try {
+            // remove temp files since they might not always be overwritten
+            rmdirSync('./tmp', { recursive: true });
+            await mkdirIfNotExists('./tmp');
+        } catch (err) {
+            throw new Error(`Error while creating tmp folder: ${err.message}`);
+        }
 
         // login to moodle
         logger.info('Logging into Moodle');
@@ -56,7 +65,7 @@ const { getUTCDateTimestamp } = require('./helpers/date');
                 const recording = recordings[idx];
 
                 // filename
-                let filename = `${recording.name}.${recording.format}`.replace(/[\\/:"*?<>| ]/g, '_');;
+                let filename = `${recording.name}.${recording.format}`.replace(/[\\/:"*?<>| ]/g, '_');
                 if (course.prepend_date)
                     filename = `${getUTCDateTimestamp(recording.created_at, '')}-${filename}`;
 
@@ -66,6 +75,7 @@ const { getUTCDateTimestamp } = require('./helpers/date');
                     courseNameUnspecified ? course.name : `${course.name}_${course.id}`
                 );
                 let downloadPath = join(folderPath, filename);
+                let tmpDownloadPath = join('./tmp/', filename);
                 try {
                     await mkdirIfNotExists(folderPath);
                 } catch (err) {
@@ -80,12 +90,16 @@ const { getUTCDateTimestamp } = require('./helpers/date');
                         try {
                             logger.debug('      └─ Trying download feature');
                             const downloadUrl = await getWebexRecordingDownloadUrl(recording.file_url, recording.password);
-                            await downloadStream(downloadUrl, downloadPath, configs.download.progress_bar);
+                            await downloadStream(downloadUrl, tmpDownloadPath, configs.download.progress_bar);
                         } catch {
                             logger.info('      └─ Trying downloading stream (may be slower)');
                             const { playlistUrl, filesize } = await getWebexRecordingHSLPlaylist(recording.recording_url, recording.password);
-                            await downloadHLSPlaylist(playlistUrl, downloadPath, filesize, configs.download.progress_bar);
+                            await downloadHLSPlaylist(playlistUrl, tmpDownloadPath, filesize, configs.download.progress_bar);
                         }
+
+                        // Download was successful, move rec to destination
+                        logger.debug('Moving file out of tmp folder');
+                        renameSync(tmpDownloadPath, downloadPath);
                     } catch (err) {
                         logger.error(`      └─ Skipped because of: ${err.message}`);
                         continue;
