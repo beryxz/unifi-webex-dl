@@ -33,11 +33,12 @@ Run the app with: `npm start`
 
 > Array of objects, one for each course. The object contains:
 
-- `id`: id of the course shown in the url bar of Moodle
-- `name`: prepended to the folder name and also shown in the logs
-- `skip_names`: (Optional) regex to match recordings names to skip. Exclude slashes and flags from strings. E.g. `'test'` and NOT `'/test/i'`
-- `skip_before_date`: (Optional) skip recordings before the date `YYYY-MM-DD`
-- `skip_after_date`: (Optional) skip recordings after the date `YYYY-MM-DD`
+- `id` string: id of the course shown in the url bar of Moodle
+- `name` string: prepended to the folder name and also shown in the logs
+- `skip_names` string: (Optional) regex to match recordings names to skip. Exclude slashes and flags from strings. E.g. `'test'` and NOT `'/test/i'`
+- `skip_before_date` string: (Optional) skip recordings before the date `YYYY-MM-DD`
+- `skip_after_date` string: (Optional) skip recordings after the date `YYYY-MM-DD`
+- `prepend_date` boolean: (Optional) prepend the date of the recording (`YYYYMMDD-`) to the filename
 
 ## Environment variables
 

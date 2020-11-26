@@ -5,6 +5,7 @@ const logger = require('./helpers/logging')('app');
 const { join } = require('path');
 const { existsSync } = require('fs');
 const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists } = require('./helpers/download');
+const { getUTCDateTimestamp } = require('./helpers/date');
 
 (async () => {
     try {
@@ -54,8 +55,12 @@ const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists } = require('./hel
             for (let idx = 0; idx < recordings.length; idx++) {
                 const recording = recordings[idx];
 
+                // filename
+                let filename = `${recording.name}.${recording.format}`.replace(/[\\/:"*?<>| ]/g, '_');;
+                if (course.prepend_date)
+                    filename = `${getUTCDateTimestamp(recording.created_at, '')}-${filename}`;
+
                 // Make folder structure for downloadPath
-                let filename = `${recording.name}.${recording.format}`.replace(/[\\/:"*?<>| ]/g, '_');
                 let folderPath = join(
                     configs.download.base_path,
                     courseNameUnspecified ? course.name : `${course.name}_${course.id}`
