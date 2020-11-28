@@ -7,9 +7,9 @@
 function getUTCDateTimestamp(date, separator = '') {
     const d = new Date(date);
     return [
-        pad0(d.getUTCFullYear(), 4),
-        pad0(d.getUTCMonth()+1, 2),
-        pad0(d.getUTCDate(), 2)
+        pad0(''+d.getUTCFullYear(), 4),
+        pad0(''+(d.getUTCMonth()+1), 2),
+        pad0(''+d.getUTCDate(), 2)
     ].join(separator);
 }
 
@@ -20,7 +20,7 @@ function getUTCDateTimestamp(date, separator = '') {
  * @returns {string}
  */
 function pad0(text, length = 0) {
-    const pad = (text.length - length) > 0 ? '0'.repeat(text, text.length - length) : '';
+    const pad = text.length < length ? '0'.repeat(length - text.length) : '';
     return pad + text;
 }
 
