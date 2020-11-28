@@ -212,7 +212,7 @@ async function getWebexRecordingDownloadUrl(fileUrl, password) {
     let res, params;
 
     res = await axios.get(fileUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (/Error/.test(res.data))
+    if (/(You can\\'t access this recording|Impossibile accedere a questa registrazione)/.test(res.data))
         throw new Error('Recording has been deleted or isn\'t available at the moment');
 
     // res is the response from nbrshared
@@ -284,7 +284,7 @@ async function getWebexRecordingDownloadUrl(fileUrl, password) {
 async function recordingStreamOptions(recording_url, password) {
     // get recordingId
     let res = await axios.get(recording_url);
-    if (/Error/.test(res.data))
+    if (/(You can\\'t access this recording|Impossibile accedere a questa registrazione)/.test(res.data))
         throw new Error('Recording has been deleted or isn\'t available at the moment');
 
     let recordingId = res.data.match(/location.href.+?https:\/\/unifirenze\.webex.+?playback\/([a-zA-Z0-9]+)/)?.[1];
