@@ -212,8 +212,8 @@ async function getWebexRecordingDownloadUrl(fileUrl, password) {
     let res, params;
 
     res = await axios.get(fileUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (/(You can\\'t access this recording|Impossibile accedere a questa registrazione)/.test(res.data))
-        throw new Error('Recording has been deleted or isn\'t available at the moment');
+    if (/(ico-warning|TblContentFont2)/.test(res.data))
+        throw new Error('Recording deleted, not available, or not downloadable.');
 
     // res is the response from nbrshared
     res = (/internalRecordTicket/.test(res.data))
