@@ -92,7 +92,7 @@ const { getUTCDateTimestamp } = require('./helpers/date');
                             const downloadUrl = await getWebexRecordingDownloadUrl(recording.file_url, recording.password);
                             await downloadStream(downloadUrl, tmpDownloadPath, configs.download.progress_bar);
                         } catch (error) {
-                            logger.warning(`      └─ Error: ${error}`);
+                            logger.warn(`      └─ Error: ${error}`);
                             logger.info('      └─ Trying downloading stream (may be slower)');
                             const { playlistUrl, filesize } = await getWebexRecordingHSLPlaylist(recording.recording_url, recording.password);
                             await downloadHLSPlaylist(playlistUrl, tmpDownloadPath, filesize, configs.download.progress_bar);
