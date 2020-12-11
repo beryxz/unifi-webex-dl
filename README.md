@@ -137,9 +137,6 @@ From the response:
 
 Get cookies [`ahoy_visitor`, `ahoy_visit`, `_ea_involvio_lti_session`]
 
-Extract the JWT from the response body:
-`&quot;json_web_token&quot;:&quot;eyJh***.****.****&quot;`
-
 ### Get Webex course recordings
 
 > GET <https://lti.educonnector.io/api/webex/recordings>
@@ -147,7 +144,6 @@ Extract the JWT from the response body:
 The request headers should match the following
 
 ```html
-Authorization: Bearer json_web_token
 Cookie: ahoy_visitor=***,ahoy_visit=***,_ea_involvio_lti_session=***
 ```
 

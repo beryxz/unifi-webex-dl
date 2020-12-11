@@ -22,15 +22,16 @@ async function launchWebex(launchParameters) {
         // Get only the first part of the cookie without the optional part
         const cookies = getCookies(res.headers['set-cookie']);
 
+        //NOTE: API changed, shouldn't be necessary anymore. Anyway, "json_web_token" changed to "session_ticket"
         // match JWT
-        let jwt = res.data.match(/(?:"|&quot;)json_web_token(?:"|&quot;):(?:"|&quot;)([a-zA-Z0-9.\-_=+/]+?)(?:"|&quot;)/);
-        if (jwt === null)
-            throw new Error('JWT not found');
-        jwt = jwt[1];
+        // let jwt = res.data.match(/(?:"|&quot;)json_web_token(?:"|&quot;):(?:"|&quot;)([a-zA-Z0-9.\-_=+/]+?)(?:"|&quot;)/);
+        // if (jwt === null)
+        //     throw new Error('JWT not found');
+        // jwt = jwt[1];
         // logger.debug(`├─ jwt: ${jwt}`);
         // logger.debug(`└─ cookies: ${cookies}`);
 
-        return { jwt, cookies: cookies };
+        return { cookies: cookies };
     } catch (err) {
         throw new Error(`Couldn't launch webex. ${err.message}`);
     }
@@ -38,14 +39,13 @@ async function launchWebex(launchParameters) {
 
 /**
  * Get all available recordings for the given webex course
- * @param {Object} webexObject Object with { jwt, cookies }
+ * @param {Object} webexObject Object with { cookies }
  * @returns {Array} List of all the available recordings
  */
 async function getWebexRecordings(webexObject) {
     logger.debug('Get recordings');
     const res = await axios.get('https://lti.educonnector.io/api/webex/recordings', {
         headers: {
-            'Authorization': `Bearer ${webexObject.jwt}`,
             'Cookie': webexObject.cookies,
             'User-Agent': 'Mozilla/5.0'
         }
