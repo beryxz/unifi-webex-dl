@@ -3,7 +3,7 @@ const { loginMoodle, getCourseName, getWebexLaunchOptions } = require('./helpers
 const { launchWebex, getWebexRecordings, getWebexRecordingDownloadUrl, getWebexRecordingHSLPlaylist } = require('./helpers/webex');
 const logger = require('./helpers/logging')('app');
 const { join } = require('path');
-const { existsSync, renameSync, rmdirSync } = require('fs');
+const { existsSync, renameSync, readdirSync, unlinkSync } = require('fs');
 const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists } = require('./helpers/download');
 const { getUTCDateTimestamp } = require('./helpers/date');
 
@@ -15,9 +15,11 @@ const { getUTCDateTimestamp } = require('./helpers/date');
 
         // tmp folder for downloads
         try {
-            // remove temp files since they might not always be overwritten
-            rmdirSync('./tmp', { recursive: true });
             await mkdirIfNotExists('./tmp');
+            // remove temp files of execution abruptly interrupted
+            readdirSync('./tmp').forEach(tmpfile => {
+                unlinkSync(join('./tmp/', tmpfile))
+            })
         } catch (err) {
             throw new Error(`Error while creating tmp folder: ${err.message}`);
         }
