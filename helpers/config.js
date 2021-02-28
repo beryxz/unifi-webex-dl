@@ -1,5 +1,6 @@
 const { existsSync, readFileSync } = require('fs');
 const logger = require('./logging')('config');
+const yaml = require('yaml');
 
 /**
  * Check whether the given object is undefined, null, empty string or empty object
@@ -45,7 +46,7 @@ async function load(configPath) {
         logger.warn(`Missing file ${configPath}`);
         config = {};
     } else {
-        config = JSON.parse(readFileSync(configPath, 'utf8'));
+        config = yaml.parse(readFileSync(configPath, 'utf8'));
     }
 
     // Read env variables and if not exists, assign config file values

@@ -22,7 +22,8 @@
     "cheerio": "^1.0.0-rc.5",
     "progress": "^2.0.3",
     "qs": "^6.9.6",
-    "winston": "^3.3.3"
+    "winston": "^3.3.3",
+    "yaml": "2.0.0-3"
   },
   "devDependencies": {
     "eslint": "^7.19.0"
