@@ -18,6 +18,10 @@ Run the app with: `npm start`
 
 > The config file has 3 sections.
 
+Currently, both **.json** and **.yaml** file are supported, json being the default one.
+
+Default config file path is `config.json` inside of the root directory, you can change it with the environment variable `CONFIG_PATH`.
+
 ### Credentials
 
 - `username`: used for authenticating to the Moodle Platform.

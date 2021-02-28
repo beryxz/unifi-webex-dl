@@ -11,15 +11,16 @@ const { getUTCDateTimestamp } = require('./helpers/date');
     try {
         // get moodle credentials and courses ids
         logger.info('Loading configs');
-        let configs = await config.load('./config.json');
+        const configPath = process.env['CONFIG_PATH'] || './config.json';
+        let configs = await config.load(configPath);
 
         // tmp folder for downloads
         try {
             await mkdirIfNotExists('./tmp');
             // remove temp files of execution abruptly interrupted
             readdirSync('./tmp').forEach(tmpfile => {
-                unlinkSync(join('./tmp/', tmpfile))
-            })
+                unlinkSync(join('./tmp/', tmpfile));
+            });
         } catch (err) {
             throw new Error(`Error while creating tmp folder: ${err.message}`);
         }
@@ -108,7 +109,7 @@ const { getUTCDateTimestamp } = require('./helpers/date');
                         continue;
                     }
                 } else if (configs.download.show_existing) {
-                    logger.info(`   └─ Alredy exists: ${recording.name}`);
+                    logger.info(`   └─ Already exists: ${recording.name}`);
                 }
             }
         }
