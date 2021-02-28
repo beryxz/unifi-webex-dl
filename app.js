@@ -11,7 +11,8 @@ const { getUTCDateTimestamp } = require('./helpers/date');
     try {
         // get moodle credentials and courses ids
         logger.info('Loading configs');
-        let configs = await config.load('./config.yaml');
+        const configPath = process.env['CONFIG_PATH'] || './config.json';
+        let configs = await config.load(configPath);
 
         // tmp folder for downloads
         try {

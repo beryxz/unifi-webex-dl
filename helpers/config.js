@@ -34,6 +34,37 @@ function checkCourses(courses) {
 }
 
 /**
+ * @param {string} configPath
+ */
+function parseJson(configPath) {
+    return JSON.parse(readFileSync(configPath, 'utf8'));
+}
+/**
+ * @param {string} configPath
+ */
+function parseYaml(configPath) {
+    return yaml.parse(readFileSync(configPath, 'utf8'));
+}
+/**
+ * @param {string} configPath
+ */
+function parseConfigFile(configPath) {
+    if (!existsSync(configPath)) {
+        logger.warn(`Missing file ${configPath}`);
+        return {};
+    }
+
+    switch (configPath.match(/\.([a-z]+)$/)?.[1]) {
+    case 'json':
+        return parseJson(configPath);
+    case 'yaml':
+        return parseYaml(configPath);
+    default:
+        return {};
+    }
+}
+
+/**
  * Read configs from file and/or envariable variables if set.
  * @param {string} configPath
  */
@@ -41,13 +72,7 @@ async function load(configPath) {
     logger.debug(`Loading ${configPath}`);
 
     // Try to load file
-    let config;
-    if (!existsSync(configPath)) {
-        logger.warn(`Missing file ${configPath}`);
-        config = {};
-    } else {
-        config = yaml.parse(readFileSync(configPath, 'utf8'));
-    }
+    let config = parseConfigFile(configPath);
 
     // Read env variables and if not exists, assign config file values
     logger.debug('Reading env variables');
