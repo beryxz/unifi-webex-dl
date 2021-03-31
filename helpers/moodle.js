@@ -5,7 +5,8 @@ const logger = require('./logging')('moodle');
 const { checkMoodleCookie } = require('./cookie');
 
 /**
- * Login into Moddle platform and return sessionToken cookie.
+ * Old way of Logging into the Moddle platform.
+ * @deprecated since version 4.0.0
  * @param {string} username Moodle username
  * @param {string} password Moodle password
  * @returns {string} Moodle session token cookie
@@ -52,6 +53,66 @@ async function loginMoodle(username, password) {
     if (res.data.match(/loginerrormessage/) !== null) {
         throw new Error('Invalid credentials');
     }
+
+    return cookie;
+}
+
+/**
+ * Login into Moddle platform through the "Autenticazione Unica UniFi" portal.
+ * @param {string} username Moodle username
+ * @param {string} password Moodle password
+ * @returns {string} Moodle session token cookie
+ */
+async function loginMoodleUnifiedAuth(username, password) {
+    let res, executionToken, cookie;
+
+    // get loginToken
+    logger.debug('Loading login portal');
+    res = await axios.get('https://identity.unifi.it/cas/login?service=https://e-l.unifi.it/login/index.php?authCASattras=CASattras', { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    executionToken = res.data.match(/name="execution" value="(.+?)"/)[1];
+    logger.debug(`└─ executionToken: ${executionToken}`);
+
+    // post credentials
+    logger.debug('Posting form to login portal');
+    res = await axios.post('https://identity.unifi.it/cas/login?service=https://e-l.unifi.it/login/index.php?authCASattras=CASattras', qs.stringify({
+        username: username,
+        password: password,
+        execution: executionToken,
+        _eventId: 'submit',
+        geolocation: ''
+    }), {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'Mozilla/5.0'
+        },
+        maxRedirects: 0,
+        validateStatus: status => status === 302 || status === 303
+    });
+
+    // post credentials
+    logger.debug('Login on Moodle with ticket');
+    res = await axios.get(res.headers.location, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0'
+        },
+        maxRedirects: 0,
+        validateStatus: status => status === 302 || status === 303
+    });
+    cookie = checkMoodleCookie(res.headers['set-cookie']);
+    logger.debug(`└─ Cookie: ${cookie}`);
+
+    // post credentials
+    logger.debug('Getting authorized session token');
+    res = await axios.get(res.headers.location, {
+        headers: {
+            'Cookie': cookie,
+            'User-Agent': 'Mozilla/5.0'
+        },
+        maxRedirects: 0,
+        validateStatus: status => status === 302 || status === 303
+    });
+    cookie = checkMoodleCookie(res.headers['set-cookie']);
+    logger.debug(`└─ Cookie: ${cookie}`);
 
     return cookie;
 }
@@ -134,5 +195,5 @@ async function getWebexLaunchOptions(sessionToken, courseId) {
 }
 
 module.exports = {
-    loginMoodle, getCourseName, getWebexLaunchOptions
+    loginMoodleUnifiedAuth, getCourseName, getWebexLaunchOptions
 };

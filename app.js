@@ -1,5 +1,5 @@
 const config = require('./helpers/config');
-const { loginMoodle, getCourseName, getWebexLaunchOptions } = require('./helpers/moodle');
+const { loginMoodleUnifiedAuth, getCourseName, getWebexLaunchOptions } = require('./helpers/moodle');
 const { launchWebex, getWebexRecordings, getWebexRecordingDownloadUrl, getWebexRecordingHSLPlaylist } = require('./helpers/webex');
 const logger = require('./helpers/logging')('app');
 const { join } = require('path');
@@ -27,7 +27,7 @@ const { getUTCDateTimestamp } = require('./helpers/date');
 
         // login to moodle
         logger.info('Logging into Moodle');
-        const moodleSession = await loginMoodle(configs.credentials.username, configs.credentials.password);
+        const moodleSession = await loginMoodleUnifiedAuth(configs.credentials.username, configs.credentials.password);
         for (const course of configs.courses) {
             const courseNameUnspecified = !course.name;
             logger.info(`Working on course: ${course.id}${courseNameUnspecified ? '' : ' - ' + course.name}`);
