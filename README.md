@@ -112,10 +112,9 @@ To launch webex we have to get the webex id relative to the moodle course id.
 
 > GET https://e-l.unifi.it/course/view.php?id=42
 
-In the body match the launch url. Either of these:
+In the body match the launch url:
 
 - `https://e-l.unifi.it/mod/lti/launch.php?id=***`
-- `https://e-l.unifi.it/mod/lti/view.php?id=***`
 
 Retrieve the id parameter
 

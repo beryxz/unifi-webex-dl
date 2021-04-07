@@ -158,7 +158,7 @@ async function getWebexId(sessionToken, courseId) {
     });
 
     // Match the webex id
-    const match = res.data.match(/https:\/\/e-l\.unifi\.it\/mod\/lti\/(?:launch|view)\.php\?id=(\d+)/);
+    const match = res.data.match(/https:\/\/e-l\.unifi\.it\/mod\/lti\/(?:launch)\.php\?id=(\d+)/);
     return (match === null) ? null : match[1];
 }
 
