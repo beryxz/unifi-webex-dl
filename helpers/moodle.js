@@ -143,7 +143,7 @@ async function getCourseName(sessionToken, courseId) {
  * Extract the webex id from the moodle course page
  * @param {string} sessionToken Moodle session cookie
  * @param {number} courseId Moodle course id
- * @returns {null|number} The id if it was found, null otherwise
+ * @returns {null|string} The id if it was found, null otherwise
  * @throws when axios request wasn't successful
  */
 async function getWebexId(sessionToken, courseId) {
@@ -166,14 +166,20 @@ async function getWebexId(sessionToken, courseId) {
  * Get the required parameters to access the webex page of the webex course extracted from, the moodle page of the given course id.
  * @param {string} sessionToken MoodleSession cookie used to authenticate
  * @param {number} courseId Course id from which to retrieve webexId and then the relative launch parameters
- * @return {String|null} Parameters to set in the post request to launch webex. null if webex course id couldn't be found.
+ * @param {string|number} [customWebexId=null] Custom Webex id that override the one found in the course page, if defined
+ * @return {string|null} Parameters to set in the post request to launch webex. null if webex course id couldn't be found.
  */
-async function getWebexLaunchOptions(sessionToken, courseId) {
+async function getWebexLaunchOptions(sessionToken, courseId, customWebexId=null) {
     try {
-        // Get webex id
-        const webexId = await getWebexId(sessionToken, courseId);
-        if (webexId === null)
-            return null;
+        // Get webex id if not overridden
+        let webexId;
+        if (customWebexId == null | customWebexId == undefined) {
+            webexId = await getWebexId(sessionToken, courseId);
+            if (webexId === null)
+                return null;
+        } else {
+            webexId = customWebexId;
+        }
         logger.debug(`Webex id: ${webexId}`);
 
         // Get launch parameters

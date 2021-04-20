@@ -39,6 +39,7 @@ Default config file path is `config.json` inside of the root directory, you can 
 
 - `id` string: id of the course shown in the url bar of Moodle
 - `name` string: prepended to the folder name and also shown in the logs
+- `custom_webex_id` string: (Optional) manually set the id of the webex page instead of trying to match it from the course page
 - `skip_names` string: (Optional) regex to match recordings names to skip. Exclude slashes and flags from strings. E.g. `'test'` and NOT `'/test/i'`
 - `skip_before_date` string: (Optional) skip recordings before the date `YYYY-MM-DD`
 - `skip_after_date` string: (Optional) skip recordings after the date `YYYY-MM-DD`

@@ -39,7 +39,7 @@ const { getUTCDateTimestamp } = require('./helpers/date');
             }
 
             // Launch webex
-            const launchParameters = await getWebexLaunchOptions(moodleSession, course.id);
+            const launchParameters = await getWebexLaunchOptions(moodleSession, course.id, course?.custom_webex_id);
             if (launchParameters === null) {
                 logger.warn('└─ Webex id not found... Skipping');
             }
