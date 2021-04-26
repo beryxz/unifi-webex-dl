@@ -158,7 +158,19 @@ async function getWebexId(sessionToken, courseId) {
     });
 
     // Match the webex id
-    const match = res.data.match(/https:\/\/e-l\.unifi\.it\/mod\/lti\/(?:launch)\.php\?id=(\d+)/);
+    // Match the canonical `launch.php` path
+    let match = res.data.match(/https:\/\/e-l\.unifi\.it\/mod\/lti\/(?:launch)\.php\?id=(\d+)/);
+    if (!match) {
+        // Check for unreliable `view.php` paths
+        let matches = [ ...res.data.matchAll(/https:\/\/e-l\.unifi\.it\/mod\/lti\/(?:view)\.php\?id=(\d+)/g) ];
+        if (matches.length === 1) {
+            // If there's only one match, use that
+            match = matches[0];
+        } else {
+            // If there are multiple `view.php` entries, try to use the one with the webex logo
+            match = res.data.match(/https:\/\/e-l\.unifi\.it\/mod\/lti\/(?:view)\.php\?id=(\d+)"><img src="https:\/\/www.webex.com\//);
+        }
+    }
     return (match === null) ? null : match[1];
 }
 
@@ -173,7 +185,7 @@ async function getWebexLaunchOptions(sessionToken, courseId, customWebexId=null)
     try {
         // Get webex id if not overridden
         let webexId;
-        if (customWebexId == null | customWebexId == undefined) {
+        if (customWebexId == null || customWebexId == undefined) {
             webexId = await getWebexId(sessionToken, courseId);
             if (webexId === null)
                 return null;
