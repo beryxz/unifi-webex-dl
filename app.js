@@ -3,7 +3,7 @@ const { loginMoodleUnifiedAuth, getCourseName, getWebexLaunchOptions } = require
 const { launchWebex, getWebexRecordings, getWebexRecordingDownloadUrl, getWebexRecordingHSLPlaylist } = require('./helpers/webex');
 const logger = require('./helpers/logging')('app');
 const { join } = require('path');
-const { existsSync, renameSync, readdirSync, unlinkSync } = require('fs');
+const { existsSync, renameSync, readdirSync, readFileSync, unlinkSync, writeFileSync } = require('fs');
 const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists } = require('./helpers/download');
 const { getUTCDateTimestamp } = require('./helpers/date');
 
@@ -103,7 +103,19 @@ const { getUTCDateTimestamp } = require('./helpers/date');
 
                         // Download was successful, move rec to destination
                         logger.debug('Moving file out of tmp folder');
-                        renameSync(tmpDownloadPath, downloadPath);
+                        try {
+                            renameSync(tmpDownloadPath, downloadPath);
+                        } catch (err) {
+                            if (err.code === 'EXDEV') {
+                                // Cannot move files that are not in the top OverlayFS layer (e.g.: inside volumes)
+                                logger.debug('Probably inside a Docker container, falling back to copy-and-unlink');
+                                const fileContents = readFileSync(tmpDownloadPath);
+                                writeFileSync(downloadPath, fileContents);
+                                unlinkSync(tmpDownloadPath);
+                            } else {
+                                throw err;  // Bubble up
+                            }
+                        }
                     } catch (err) {
                         logger.error(`      └─ Skipped because of: ${err.message}`);
                         continue;

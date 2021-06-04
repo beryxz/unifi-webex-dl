@@ -14,6 +14,12 @@ Copy `config.example.json` to `config.json` and change credentials and courses i
 
 Run the app with: `npm start`
 
+## [Optional] Quick Start with Docker
+
+If you have docker you can execute the `docker.sh` to build and use the downloader inside of a container.
+
+Note that it only works if your user and groups have 1000 as UID and GID.
+
 ## Config
 
 > The config file has 3 sections.
