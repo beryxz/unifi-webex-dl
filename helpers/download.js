@@ -23,10 +23,10 @@ function mkdirIfNotExists(dir_path) {
                         reject(`Error creating directory. ${err.code}`);
                     resolve();
                 });
+            } else {
+                // dir exists
+                resolve();
             }
-
-            // dir exists
-            resolve();
         });
     });
 }
