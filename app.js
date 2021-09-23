@@ -10,8 +10,18 @@ const { getUTCDateTimestamp } = require('./helpers/date');
 (async () => {
     try {
         // get moodle credentials and courses ids
-        logger.info('Loading configs');
-        const configPath = process.env['CONFIG_PATH'] || './config.json';
+        let configPath = process.env['CONFIG_PATH'];
+        if (!configPath) {
+            if (existsSync('./config.json')) {
+                logger.info('Loading config.json');
+                configPath = './config.json';
+            } else if (existsSync('./config.yaml')) {
+                logger.info('Loading config.yaml');
+                configPath = './config.yaml';
+            }
+        } else {
+            logger.info(`Loading ${configPath}`);
+        }
         let configs = await config.load(configPath);
 
         // tmp folder for downloads

@@ -83,7 +83,7 @@ This approach works for now but is prone to errors and stop working if something
 
 _As of March 2021 they use this new unified authentication system for accessing their services._
 
-> GET https://identity.unifi.it/cas/login?service=https://e-l.unifi.it/login/index.php?authCASattras=CASattras
+> GET <https://identity.unifi.it/cas/login?service=https://e-l.unifi.it/login/index.php?authCASattras=CASattras>
 
 In the response body match
 
@@ -91,7 +91,7 @@ In the response body match
 
 Then post the form with the `execution` field.
 
-> POST https://identity.unifi.it/cas/login?service=https://e-l.unifi.it/login/index.php?authCASattras=CASattras
+> POST <https://identity.unifi.it/cas/login?service=https://e-l.unifi.it/login/index.php?authCASattras=CASattras>
 >
 > Content-Type: application/x-www-form-urlencoded
 
@@ -119,7 +119,7 @@ Finally, get the authenticated `MoodleSession` Cookie from Set-Cookie response h
 
 To launch webex we have to get the webex id relative to the moodle course id.
 
-> GET https://e-l.unifi.it/course/view.php?id=42
+> GET <https://e-l.unifi.it/course/view.php?id=42>
 
 In the body match the launch url:
 
@@ -129,7 +129,7 @@ Retrieve the id parameter
 
 ### Get Webex launch parameters
 
-> GET https://e-l.unifi.it/mod/lti/launch.php?id=1337>
+> GET <https://e-l.unifi.it/mod/lti/launch.php?id=1337>>
 >
 > Cookie: MoodleSession
 
@@ -137,7 +137,7 @@ Serialize from the html body all the name attributes in input tags
 
 ### Launch Webex
 
-> POST https://lti.educonnector.io/launches
+> POST <https://lti.educonnector.io/launches>
 >
 > Content-Type: application/x-www-form-urlencoded
 
@@ -149,7 +149,7 @@ Get cookies [`ahoy_visitor`, `ahoy_visit`, `_ea_involvio_lti_session`]
 
 ### Get Webex course recordings
 
-> GET https://lti.educonnector.io/api/webex/recordings
+> GET <https://lti.educonnector.io/api/webex/recordings>
 
 The request headers should match the following
 
@@ -226,7 +226,7 @@ Note that you may need to change `firstEntry` to false since the js does it here
 document.forms[0].firstEntry.value=false;
 ```
 
-> POST https://unifirenze.webex.com/svc3300/svccomponents/servicerecordings/recordingpasswordcheck.do
+> POST <https://unifirenze.webex.com/svc3300/svccomponents/servicerecordings/recordingpasswordcheck.do>
 
 The body should contain the input attributes from the previous request and the password of the recording
 
@@ -351,7 +351,7 @@ From the response of the `recording_url`, match the recording ID.
 location.href='https://unifirenze.webex.com/recordingservice/sites/unifirenze/recording/playback/RECORDING_ID';
 ```
 
-> GET https://unifirenze.webex.com/webappng/api/v1/recordings/RECORDING_ID/stream?siteurl=unifirenze
+> GET <https://unifirenze.webex.com/webappng/api/v1/recordings/RECORDING_ID/stream?siteurl=unifirenze>
 
 In the request also add the following custom header
 
@@ -363,7 +363,7 @@ In the response json object save the parameter: `mp4StreamOption`
 
 ### Download a HLS Stream - STEP 3
 
-> POST https://nln1vss.webex.com/apis/html5-pipeline.do
+> POST <https://nln1vss.webex.com/apis/html5-pipeline.do>
 
 In the request add the following query parameters from the `mp4StreamOption` object of the previous step:
 

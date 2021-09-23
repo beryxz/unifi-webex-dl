@@ -65,7 +65,7 @@ function parseConfigFile(configPath) {
 }
 
 /**
- * Read configs from file and/or envariable variables if set.
+ * Read configs from file and/or env variables if set.
  * @param {string} configPath
  */
 async function load(configPath) {
