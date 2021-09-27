@@ -3,6 +3,31 @@ const logger = require('./logging')('config');
 const yaml = require('yaml');
 
 /**
+ * @typedef Course
+ * @type {object}
+ * @property {string} id
+ * @property {string} name
+ * @property {string} custom_webex_id
+ * @property {string} skip_names
+ * @property {string} skip_before_date
+ * @property {string} skip_after_date
+ * @property {boolean} prepend_date
+ */
+
+/**
+ * @typedef Config
+ * @type {object}
+ * @property {object} credentials
+ * @property {object} credentials.username
+ * @property {object} credentials.password
+ * @property {object} download
+ * @property {object} download.base_path
+ * @property {object} download.progress_bar
+ * @property {object} download.show_existing
+ * @property {Course[]} courses
+ */
+
+/**
  * Check whether the given object is undefined, null, empty string or empty object
  * @param {any} object to entity to check
  */
@@ -67,6 +92,7 @@ function parseConfigFile(configPath) {
 /**
  * Read configs from file and/or env variables if set.
  * @param {string} configPath
+ * @return {Config} Configs object
  */
 async function load(configPath) {
     logger.debug(`Loading ${configPath}`);

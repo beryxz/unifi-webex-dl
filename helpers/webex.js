@@ -5,6 +5,23 @@ const qs = require('qs');
 const { getCookies } = require('./cookie');
 
 /**
+ * @typedef Recording
+ * @type {object}
+ * @property {number} id
+ * @property {string} name
+ * @property {string} created_at
+ * @property {string} updated_at
+ * @property {string} recording_url
+ * @property {string} timezone
+ * @property {number} duration_hour
+ * @property {number} duration_min
+ * @property {number} duration_sec
+ * @property {string} file_url
+ * @property {string} format
+ * @property {string} password
+ */
+
+/**
  * Launch the webex platform and retrieve the JWT and Cookies
  * @param {string} launchParameters urlencoded string to send as post body to access webex
  * @returns {Object} { jwt, cookies }
@@ -40,7 +57,7 @@ async function launchWebex(launchParameters) {
 /**
  * Get all available recordings for the given webex course
  * @param {Object} webexObject Object with { cookies }
- * @returns {Array} List of all the available recordings
+ * @returns {Recording[]} List of all the available recordings
  */
 async function getWebexRecordings(webexObject) {
     logger.debug('Get recordings');
