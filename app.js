@@ -52,8 +52,10 @@ async function loginToMoodle(configs) {
 }
 
 /**
+ * Get all recordings, applying filters specified in the course's config
  * @param {config.Course} course
  * @param {string} moodleSession
+ * @return {object}
  */
 async function getRecordings(course, moodleSession) {
     // Launch webex
@@ -79,9 +81,11 @@ async function getRecordings(course, moodleSession) {
         }
     });
 
-    logger.info(`└─ Found ${recordingsAll.length} recordings (${recordingsAll.length - recordings.length} filtered)`);
-
-    return recordings;
+    return {
+        recordings: recordings,
+        totalCount: recordingsAll.length,
+        filteredCount: recordingsAll.length - recordings.length
+    };
 }
 
 /**
@@ -162,23 +166,36 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
 }
 
 /**
- * Process all moodle courses specified in the configs
+ * Process all moodle courses specified in the configs.
+ *
+ * Initially, the recordings list are fetched simultaneously.
+ * Then, each recordings list is processed individually.
  * @param {config.Config} configs
  * @param {string} moodleSession
  */
 async function processCourses(configs, moodleSession) {
-    for (const course of configs.courses) {
-        const courseNameUnspecified = !course.name;
-        logger.info(`Working on course: ${course.id}${courseNameUnspecified ? '' : ' - ' + course.name}`);
+    let coursesToProcess = [];
 
+    logger.info('Fetching recordings lists');
+    for (const course of configs.courses) {
         // Get course name if unspecified
         if (!course.name) {
             course.name = await getCourseName(moodleSession, course.id);
             logger.info(`Got course name: ${course.name}`);
         }
 
-        const recordings = await getRecordings(course, moodleSession);
-        await processCourseRecordings(course, recordings, configs.download);
+        coursesToProcess.push({
+            recordings: getRecordings(course, moodleSession),
+            course: course
+        });
+    }
+
+    for (const c of coursesToProcess) {
+        const recordings = await c.recordings;
+        logger.info(`Working on course: ${c.course.id} - ${c.course.name ?? ''}`);
+        logger.info(`└─ Found ${recordings.totalCount} recordings (${recordings.filteredCount} filtered)`);
+
+        await processCourseRecordings(c.course, recordings.recordings, configs.download);
     }
 }
 
