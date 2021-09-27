@@ -271,9 +271,9 @@ async function getWebexRecordingDownloadUrl(fileUrl, password) {
         });
         // parse `window.parent.func_prepare(status, url, ticket)'
         let groups = res.data.match(/func_prepare\(['"](.*?)['"],['"](.*?)['"],['"](.*?)['"]\);/);
-        params = { status: groups[1], url: groups[2], ticket: groups[3]};
-        if (groups === null || !['OKOK', 'Preparing'].includes(params.status))
+        if (groups === null || !['OKOK', 'Preparing'].includes(groups[1]))
             throw new Error('Unknown error while waiting for recording to be ready');
+        params = { status: groups[1], url: groups[2], ticket: groups[3]};
         logger.debug(`├─ status: ${params.status}`);
         logger.debug(`├─ url: ${params.url}`);
         logger.debug(`└─ ticket: ${params.ticket}`);
@@ -285,8 +285,8 @@ async function getWebexRecordingDownloadUrl(fileUrl, password) {
             return downloadUrl + params.ticket;
         }
 
-        logger.debug('Recording not ready, waiting 3s...');
-        await new Promise(r => setTimeout(r, 3000));
+        logger.debug('Recording not ready, waiting 1s...');
+        await new Promise(r => setTimeout(r, 1000));
     }
 }
 
