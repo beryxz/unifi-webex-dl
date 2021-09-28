@@ -9,8 +9,6 @@ const { getUTCDateTimestamp } = require('./helpers/date');
 const MultiProgressBar = require('./helpers/MultiProgressBar');
 const { splitArrayInChunksOfFixedLength } = require('./helpers/utils');
 
-const multiProgressBar = new MultiProgressBar();
-
 /**
  * @return {config.Config} configs
  */
@@ -98,8 +96,9 @@ async function getRecordings(course, moodleSession) {
  * @param {config.ConfigDownload} downloadConfigs Download section configs
  * @param {string} downloadPath Final save-path after download its complete
  * @param {string} tmpDownloadPath Temporary save-path, used until the download its complete
+ * @param {MultiProgressBar} [multiProgressBar=null] MultiProgressBar instance to render download status
  */
-async function downloadRecordingIfNotExists(recording, downloadConfigs, downloadPath, tmpDownloadPath) {
+async function downloadRecordingIfNotExists(recording, downloadConfigs, downloadPath, tmpDownloadPath, multiProgressBar = null) {
     if (!existsSync(downloadPath)) {
         logger.info(`   └─ Downloading: ${recording.name}`);
         try {
@@ -149,6 +148,7 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
     let chunks = splitArrayInChunksOfFixedLength(recordings, downloadConfigs.max_concurrent_downloads ?? 3);
 
     for (const chunk of chunks) {
+        const multiProgressBar = new MultiProgressBar();
         let downloads = [];
 
         for (const recording of chunk) {
@@ -170,7 +170,7 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
                 throw new Error(`Error while creating folder structure: ${err.message}`);
             }
 
-            downloads.push(downloadRecordingIfNotExists(recording, downloadConfigs, downloadPath, tmpDownloadPath));
+            downloads.push(downloadRecordingIfNotExists(recording, downloadConfigs, downloadPath, tmpDownloadPath, (downloadConfigs.progress_bar ? multiProgressBar : null)));
         }
 
         await Promise.all(downloads);

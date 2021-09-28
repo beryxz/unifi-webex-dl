@@ -47,7 +47,7 @@ class MultiProgressBar {
     terminate() {
         for (let i = 0; i < this.bars.length; i++) {
             this.move(i);
-            this.stream.clearLine();
+            this.stream.clearLine(0);
             this.stream.cursorTo(0);
         }
         this.move(0);
@@ -63,7 +63,7 @@ class MultiProgressBar {
         if (bar) {
             this.move(index);
             bar.otick(value, options);
-            this.moveCursorToEnd();
+            // this.moveCursorToEnd();
         }
     }
 
@@ -72,7 +72,7 @@ class MultiProgressBar {
         if (bar) {
             this.move(index);
             bar.oupdate(value, options);
-            this.moveCursorToEnd();
+            // this.moveCursorToEnd();
         }
     }
 

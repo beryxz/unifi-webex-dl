@@ -49,9 +49,9 @@ function mkdirIfNotExists(dir_path) {
  * @param {string} url The download url
  * @param {string} savePath Where to save the downloaded file
  * @param {boolean} [showProgressBar=true] Whether to show a progress bar of the download
- * @param {MultiProgress} [multiprogress=null] MultiProgress instance for creating progress bars
+ * @param {import('./MultiProgressBar.js')} [multiProgressBar=null] MultiProgress instance for creating multiple progress bars
  */
-async function downloadStream(url, savePath, showProgressBar = true, multiprogress = null) {
+async function downloadStream(url, savePath, showProgressBar = true, multiProgressBar = null) {
     try {
         const { data, headers } = await axios.get(url, {
             responseType: 'stream',
@@ -60,9 +60,9 @@ async function downloadStream(url, savePath, showProgressBar = true, multiprogre
             }
         });
 
-        if (showProgressBar) {
+        if (multiProgressBar && showProgressBar) {
             const filesize = headers['content-length'];
-            const progressBar = multiprogress.newBar(`${bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9)} > [:bar] :percent :etas`, {
+            const progressBar = multiProgressBar.newBar(`${bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9)} > [:bar] :percent :etas`, {
                 width: 30,
                 complete: '=',
                 incomplete: ' ',
@@ -108,13 +108,13 @@ async function parsePlaylistSegments(playlistUrl) {
  * @param {string} savePath Existing path to which to save the stream
  * @param {int} filesize The size of the stream (used for visual feedback only)
  * @param {boolean} progressBar Whether to show a progress bar of the download
- * @param {MultiProgress} [multiprogress=null] MultiProgress instance for creating progress bars
+ * @param {import('./MultiProgressBar.js')} [multiProgressBar=null] MultiProgress instance for creating multiple progress bars
  */
-async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgressBar = true, multiprogress = null) {
+async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgressBar = true, multiProgressBar = null) {
     let progressBar, fileStream;
 
-    if (showProgressBar) {
-        progressBar = multiprogress.newBar(`${bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9)} > [:bar] :percent :etas`, {
+    if (multiProgressBar && showProgressBar) {
+        progressBar = multiProgressBar.newBar(`${bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9)} > [:bar] :percent :etas`, {
             width: 30,
             complete: '=',
             incomplete: ' ',
@@ -134,7 +134,7 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
 
         // progress is called after the segment finished downloading
         fileStream.on('progress', ({segment, totSegments}) => {
-            progressBar.update(segment/totSegments);
+            progressBar?.update(segment/totSegments);
         });
 
         // download each segment
@@ -184,7 +184,7 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
         // close stream
         fileStream.end();
     } catch (err) {
-        progressBar.terminate();
+        progressBar?.terminate();
         logger.error(`Error while downloading file: ${err.message}`);
         await unlink(savePath, () => {});
         fileStream?.end();
