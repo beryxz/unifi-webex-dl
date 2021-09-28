@@ -1,11 +1,24 @@
 const logger = require('./logging')('download');
-const ProgressBar = require('progress');
 const { access, createWriteStream, mkdir, unlinkSync, unlink } = require('fs');
 const axios = require('axios').default;
 const bytes = require('bytes');
 const url = require('url');
 
+/**
+ * @type {number}
+ */
 const RETRY_COUNT = 5;
+
+/**
+ * @type {bytes.BytesOptions}
+ */
+const BYTES_OPTIONS = {
+    decimalPlaces: 2,
+    fixedDecimals: true,
+    thousandsSeparator: '',
+    unit: 'MB',
+    unitSeparator: '',
+};
 
 /**
  * Asynchronously make the dir path if it doesn't exists
@@ -35,9 +48,10 @@ function mkdirIfNotExists(dir_path) {
  * Download a stream file from an url to a file
  * @param {string} url The download url
  * @param {string} savePath Where to save the downloaded file
- * @param {boolean} showProgressBar Whether to show a progress bar of the download
+ * @param {boolean} [showProgressBar=true] Whether to show a progress bar of the download
+ * @param {MultiProgress} [multiprogress=null] MultiProgress instance for creating progress bars
  */
-async function downloadStream(url, savePath, showProgressBar = true) {
+async function downloadStream(url, savePath, showProgressBar = true, multiprogress = null) {
     try {
         const { data, headers } = await axios.get(url, {
             responseType: 'stream',
@@ -48,8 +62,8 @@ async function downloadStream(url, savePath, showProgressBar = true) {
 
         if (showProgressBar) {
             const filesize = headers['content-length'];
-            const progressBar = new ProgressBar(`${bytes(parseInt(filesize))} > [:bar] :percent :etas`, {
-                width: 20,
+            const progressBar = multiprogress.newBar(`${bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9)} > [:bar] :percent :etas`, {
+                width: 30,
                 complete: '=',
                 incomplete: ' ',
                 renderThrottle: 100,
@@ -75,7 +89,7 @@ async function downloadStream(url, savePath, showProgressBar = true) {
 }
 
 /**
- * Get all seggments of a playlist URL
+ * Get all segments of a playlist URL
  * @param {string} playlistUrl The url from which to retrieve the m3u8 playlist file
  */
 async function parsePlaylistSegments(playlistUrl) {
@@ -94,13 +108,14 @@ async function parsePlaylistSegments(playlistUrl) {
  * @param {string} savePath Existing path to which to save the stream
  * @param {int} filesize The size of the stream (used for visual feedback only)
  * @param {boolean} progressBar Whether to show a progress bar of the download
+ * @param {MultiProgress} [multiprogress=null] MultiProgress instance for creating progress bars
  */
-async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgressBar = true) {
+async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgressBar = true, multiprogress = null) {
     let progressBar, fileStream;
 
     if (showProgressBar) {
-        progressBar = new ProgressBar(`${bytes(parseInt(filesize))} > [:bar] :percent :etas`, {
-            width: 40,
+        progressBar = multiprogress.newBar(`${bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9)} > [:bar] :percent :etas`, {
+            width: 30,
             complete: '=',
             incomplete: ' ',
             renderThrottle: 100,
@@ -145,7 +160,7 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
                         });
                     });
 
-                    // empit status update
+                    // emit status update
                     fileStream.emit('progress', {
                         segment: segmentNum + 1,
                         totSegments: totSegments

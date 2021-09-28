@@ -40,6 +40,7 @@ Default config file path is `config.json` inside of the root directory, you can 
 - `base_path`: path in which to download recordings
 - `progress_bar`: (Optional) boolean to set whether or not to show a progress bar while downloading the recordings. Defaults to `true`
 - `show_existing`: (Optional) boolean to set whether or not to show already downloaded recordings. Defaults to `true`
+- `max_concurrent_downloads`: (Optional) maximum number of parallel downloads. Defaults to `3`
 
 ### Courses
 

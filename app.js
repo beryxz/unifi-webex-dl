@@ -6,6 +6,10 @@ const { join } = require('path');
 const { existsSync, renameSync, readdirSync, readFileSync, unlinkSync, writeFileSync } = require('fs');
 const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists } = require('./helpers/download');
 const { getUTCDateTimestamp } = require('./helpers/date');
+const MultiProgressBar = require('./helpers/MultiProgressBar');
+const { splitArrayInChunksOfFixedLength } = require('./helpers/utils');
+
+const multiProgressBar = new MultiProgressBar();
 
 /**
  * @return {config.Config} configs
@@ -43,7 +47,7 @@ async function createTempFolder() {
 }
 
 /**
- * @param {config.Config} configs configs
+ * @param {config.Config} configs
  * @returns {string} Moodle session token cookie
  */
 async function loginToMoodle(configs) {
@@ -90,10 +94,10 @@ async function getRecordings(course, moodleSession) {
 
 /**
  * If downloadPath doesn't exists, download the recording and save it.
- * @param {import('./helpers/webex').Recording} recording
- * @param {object} downloadConfigs
- * @param {string} downloadPath
- * @param {string} tmpDownloadPath
+ * @param {import('./helpers/webex').Recording} recording Recording to download
+ * @param {config.ConfigDownload} downloadConfigs Download section configs
+ * @param {string} downloadPath Final save-path after download its complete
+ * @param {string} tmpDownloadPath Temporary save-path, used until the download its complete
  */
 async function downloadRecordingIfNotExists(recording, downloadConfigs, downloadPath, tmpDownloadPath) {
     if (!existsSync(downloadPath)) {
@@ -103,12 +107,12 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
             try {
                 logger.debug('      └─ Trying download feature');
                 const downloadUrl = await getWebexRecordingDownloadUrl(recording.file_url, recording.password);
-                await downloadStream(downloadUrl, tmpDownloadPath, downloadConfigs.progress_bar);
+                await downloadStream(downloadUrl, tmpDownloadPath, downloadConfigs.progress_bar, multiProgressBar);
             } catch (error) {
                 logger.warn(`      └─ Error: ${error}`);
                 logger.info('      └─ Trying downloading stream (may be slower)');
                 const { playlistUrl, filesize } = await getWebexRecordingHSLPlaylist(recording.recording_url, recording.password);
-                await downloadHLSPlaylist(playlistUrl, tmpDownloadPath, filesize, downloadConfigs.progress_bar);
+                await downloadHLSPlaylist(playlistUrl, tmpDownloadPath, filesize, downloadConfigs.progress_bar, multiProgressBar);
             }
 
             // Download was successful, move rec to destination
@@ -139,29 +143,37 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
  * Process a moodle course's recordings, and download all missing ones from webex
  * @param {config.Course} course The moodle course to process
  * @param {import('./helpers/webex').Recording[]} recordings Recordings to process
- * @param {object} downloadConfigs Download section configs
+ * @param {config.ConfigDownload} downloadConfigs Download section configs
  */
 async function processCourseRecordings(course, recordings, downloadConfigs) {
-    for (const recording of recordings) {
-        // filename
-        let filename = `${recording.name}.${recording.format}`.replace(/[\\/:"*?<>| ]/g, '_');
-        if (course.prepend_date)
-            filename = `${getUTCDateTimestamp(recording.created_at, '')}-${filename}`;
+    let chunks = splitArrayInChunksOfFixedLength(recordings, downloadConfigs.max_concurrent_downloads ?? 3);
 
-        // Make folder structure for downloadPath
-        let folderPath = join(
-            downloadConfigs.base_path,
-            course.name ? `${course.name}_${course.id}` : `${course.id}`
-        );
-        let downloadPath = join(folderPath, filename);
-        let tmpDownloadPath = join('./tmp/', filename);
-        try {
-            await mkdirIfNotExists(folderPath);
-        } catch (err) {
-            throw new Error(`Error while creating folder structure: ${err.message}`);
+    for (const chunk of chunks) {
+        let downloads = [];
+
+        for (const recording of chunk) {
+            // filename
+            let filename = `${recording.name}.${recording.format}`.replace(/[\\/:"*?<>| ]/g, '_');
+            if (course.prepend_date)
+                filename = `${getUTCDateTimestamp(recording.created_at, '')}-${filename}`;
+
+            // Make folder structure for downloadPath
+            let folderPath = join(
+                downloadConfigs.base_path,
+                course.name ? `${course.name}_${course.id}` : `${course.id}`
+            );
+            let downloadPath = join(folderPath, filename);
+            let tmpDownloadPath = join('./tmp/', filename);
+            try {
+                await mkdirIfNotExists(folderPath);
+            } catch (err) {
+                throw new Error(`Error while creating folder structure: ${err.message}`);
+            }
+
+            downloads.push(downloadRecordingIfNotExists(recording, downloadConfigs, downloadPath, tmpDownloadPath));
         }
 
-        await downloadRecordingIfNotExists(recording, downloadConfigs, downloadPath, tmpDownloadPath);
+        await Promise.all(downloads);
     }
 }
 

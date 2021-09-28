@@ -15,15 +15,26 @@ const yaml = require('yaml');
  */
 
 /**
+ * @typedef ConfigDownload
+ * @type {object}
+ * @property {string} base_path
+ * @property {boolean} progress_bar
+ * @property {boolean} show_existing
+ * @property {number} max_concurrent_downloads
+ */
+
+/**
+ * @typedef ConfigCredentials
+ * @type {object}
+ * @property {string} username
+ * @property {string} password
+ */
+
+/**
  * @typedef Config
  * @type {object}
- * @property {object} credentials
- * @property {object} credentials.username
- * @property {object} credentials.password
- * @property {object} download
- * @property {object} download.base_path
- * @property {object} download.progress_bar
- * @property {object} download.show_existing
+ * @property {ConfigCredentials} credentials
+ * @property {ConfigDownload} download
  * @property {Course[]} courses
  */
 
@@ -107,6 +118,7 @@ async function load(configPath) {
         base_path = (process.env['DOWNLOAD__BASE_PATH']) || config.download?.base_path,
         progress_bar = ((process.env['DOWNLOAD__PROGRESS_BAR']) || config.download?.progress_bar) ?? true,
         show_existing = ((process.env['DOWNLOAD__SHOW_EXISTING']) || config.download?.show_existing) ?? true,
+        max_concurrent_downloads = ((process.env['DOWNLOAD__MAX_CONCURRENT_DOWNLOADS']) || config.download?.max_concurrent_downloads) ?? 3,
         courses;
 
     // Work on course objects
@@ -132,7 +144,8 @@ async function load(configPath) {
         download: {
             base_path,
             progress_bar: !!progress_bar,
-            show_existing: !!show_existing
+            show_existing: !!show_existing,
+            max_concurrent_downloads
         },
         courses
     };
