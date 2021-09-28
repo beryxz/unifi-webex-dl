@@ -76,10 +76,11 @@ class MultiProgressBar {
         }
     }
 
-    moveCursorToEnd() {
-        this.stream.cursorTo(0);
-        this.move(this.bars.length);
-    }
+    //TODO: if improved, it could be used to reduce cursor flicker without using ascii chars that hide the cursor.
+    // moveCursorToEnd() {
+    //     this.stream.cursorTo(0);
+    //     this.move(this.bars.length);
+    // }
 }
 
 module.exports = MultiProgressBar;
