@@ -101,27 +101,29 @@ async function getRecordings(course, moodleSession) {
 async function downloadRecordingIfNotExists(recording, downloadConfigs, downloadPath, tmpDownloadPath, multiProgressBar = null) {
     if (!existsSync(downloadPath)) {
         logger.info(`   └─ Downloading: ${recording.name}`);
+        const downloadName = getUTCDateTimestamp(recording.created_at, '');
+
         try {
             // Try to use webex download feature and if it fails, fallback to hls stream feature
             try {
-                logger.debug('      └─ Trying download feature');
+                logger.debug(`      └─ [${downloadName}] Trying download feature`);
                 const downloadUrl = await getWebexRecordingDownloadUrl(recording.file_url, recording.password);
-                await downloadStream(downloadUrl, tmpDownloadPath, downloadConfigs.progress_bar, multiProgressBar);
+                await downloadStream(downloadUrl, tmpDownloadPath, downloadConfigs.progress_bar, multiProgressBar, downloadName);
             } catch (error) {
-                logger.warn(`      └─ Error: ${error}`);
-                logger.info('      └─ Trying downloading stream (may be slower)');
+                logger.warn(`      └─ [${downloadName}] ${error}`);
+                logger.info(`      └─ [${downloadName}] Trying downloading stream`);
                 const { playlistUrl, filesize } = await getWebexRecordingHSLPlaylist(recording.recording_url, recording.password);
-                await downloadHLSPlaylist(playlistUrl, tmpDownloadPath, filesize, downloadConfigs.progress_bar, multiProgressBar);
+                await downloadHLSPlaylist(playlistUrl, tmpDownloadPath, filesize, downloadConfigs.progress_bar, multiProgressBar, downloadName);
             }
 
             // Download was successful, move rec to destination
-            logger.debug('Moving file out of tmp folder');
+            logger.debug(`[${downloadName}] Moving file out of tmp folder`);
             try {
                 renameSync(tmpDownloadPath, downloadPath);
             } catch (err) {
                 if (err.code === 'EXDEV') {
                     // Cannot move files that are not in the top OverlayFS layer (e.g.: inside volumes)
-                    logger.debug('Probably inside a Docker container, falling back to copy-and-unlink');
+                    logger.debug(`[${downloadName}] Probably inside a Docker container, falling back to copy-and-unlink`);
                     const fileContents = readFileSync(tmpDownloadPath);
                     writeFileSync(downloadPath, fileContents);
                     unlinkSync(tmpDownloadPath);
@@ -130,7 +132,7 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
                 }
             }
         } catch (err) {
-            logger.error(`      └─ Skipped because of: ${err.message}`);
+            logger.error(`      └─ [${downloadName}] Skipped because of: ${err.message}`);
             return;
         }
     } else if (downloadConfigs.show_existing) {

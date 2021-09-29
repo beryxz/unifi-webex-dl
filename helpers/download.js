@@ -50,8 +50,9 @@ function mkdirIfNotExists(dir_path) {
  * @param {string} savePath Where to save the downloaded file
  * @param {boolean} [showProgressBar=true] Whether to show a progress bar of the download
  * @param {import('./MultiProgressBar.js')} [multiProgressBar=null] MultiProgress instance for creating multiple progress bars
+ * @param {string} downloadName Name to show before the progress bar
  */
-async function downloadStream(url, savePath, showProgressBar = true, multiProgressBar = null) {
+async function downloadStream(url, savePath, showProgressBar = true, multiProgressBar = null, downloadName = '') {
     try {
         const { data, headers } = await axios.get(url, {
             responseType: 'stream',
@@ -62,8 +63,9 @@ async function downloadStream(url, savePath, showProgressBar = true, multiProgre
 
         if (multiProgressBar && showProgressBar) {
             const filesize = headers['content-length'];
-            const progressBar = multiProgressBar.newBar(`${bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9)} > [:bar] :percent :etas`, {
-                width: 30,
+            const filesizePretty = bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9);
+            const progressBar = multiProgressBar.newBar(`[${downloadName}] ${filesizePretty} > [:bar] :percent :etas`, {
+                width: 20,
                 complete: '=',
                 incomplete: ' ',
                 renderThrottle: 100,
@@ -81,7 +83,7 @@ async function downloadStream(url, savePath, showProgressBar = true, multiProgre
             writer.on('error', reject);
         }));
     } catch (err) {
-        logger.error(`Error while downloading file: ${err.message}`);
+        logger.error(`Error while downloading [${downloadName}]: ${err.message}`);
 
         // Delete created file
         unlinkSync(savePath);
@@ -109,13 +111,15 @@ async function parsePlaylistSegments(playlistUrl) {
  * @param {int} filesize The size of the stream (used for visual feedback only)
  * @param {boolean} progressBar Whether to show a progress bar of the download
  * @param {import('./MultiProgressBar.js')} [multiProgressBar=null] MultiProgress instance for creating multiple progress bars
+ * @param {string} downloadName Name to show before the progress bar
  */
-async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgressBar = true, multiProgressBar = null) {
+async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgressBar = true, multiProgressBar = null, downloadName = '') {
     let progressBar, fileStream;
 
     if (multiProgressBar && showProgressBar) {
-        progressBar = multiProgressBar.newBar(`${bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9)} > [:bar] :percent :etas`, {
-            width: 30,
+        const filesizePretty = bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9);
+        progressBar = multiProgressBar.newBar(`[${downloadName}] ${filesizePretty} > [:bar] :percent :etas`, {
+            width: 20,
             complete: '=',
             incomplete: ' ',
             renderThrottle: 100,
@@ -172,10 +176,10 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
                     // tries up to 'RETRY_COUNT' times
                     if (retryCount < RETRY_COUNT) {
                         retryCount++;
-                        logger.debug('Segment failed, retrying...');
+                        logger.debug(`[${downloadName}] Segment ${segmentNum} failed, retrying...`);
                         await new Promise(r => setTimeout(r, 1000));
                     } else {
-                        throw new Error('Segment failed downloading');
+                        throw new Error(`[${downloadName}] Segment ${segmentNum} failed downloading`);
                     }
                 }
             } while (!success);
@@ -185,7 +189,7 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
         fileStream.end();
     } catch (err) {
         progressBar?.terminate();
-        logger.error(`Error while downloading file: ${err.message}`);
+        logger.error(`Error while downloading [${downloadName}]: ${err.message}`);
         await unlink(savePath, () => {});
         fileStream?.end();
         throw new Error(err);
