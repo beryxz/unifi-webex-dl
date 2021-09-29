@@ -22,14 +22,22 @@ const { getCookies } = require('./cookie');
  */
 
 /**
- * Launch the webex platform and retrieve the JWT and Cookies
- * @param {string} launchParameters urlencoded string to send as post body to access webex
- * @returns {Object} { jwt, cookies }
+ * @typedef WebexLaunchObject
+ * @type {object}
+ * @property {string} webexCourseId Id of the course on webex
+ * @property {string} launchParameters urlencoded string to send as post body to access webex
+ * @property {string} cookies Session cookies to call webex endpoints
  */
-async function launchWebex(launchParameters) {
+
+/**
+ * Launch the webex platform and retrieve the JWT and Cookies
+ * @param {import('./moodle').WebexLaunchOptions} webexLaunchOptions
+ * @returns {WebexLaunchObject}
+ */
+async function launchWebex(webexLaunchOptions) {
     try {
-        logger.debug('Launching Webex');
-        const res = await axios.post('https://lti.educonnector.io/launches', launchParameters, {
+        logger.debug(`[${webexLaunchOptions.webexCourseId}] Launching Webex`);
+        const res = await axios.post('https://lti.educonnector.io/launches', webexLaunchOptions.launchParameters, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'User-Agent': 'Mozilla/5.0'
@@ -48,7 +56,11 @@ async function launchWebex(launchParameters) {
         // logger.debug(`├─ jwt: ${jwt}`);
         // logger.debug(`└─ cookies: ${cookies}`);
 
-        return { cookies: cookies };
+        return {
+            webexCourseId: webexLaunchOptions.webexCourseId,
+            launchParameters: webexLaunchOptions.launchParameters,
+            cookies: cookies
+        };
     } catch (err) {
         throw new Error(`Couldn't launch webex. ${err.message}`);
     }
@@ -56,11 +68,11 @@ async function launchWebex(launchParameters) {
 
 /**
  * Get all available recordings for the given webex course
- * @param {Object} webexObject Object with { cookies }
+ * @param {WebexLaunchObject} webexObject Required to interact with webex endpoints
  * @returns {Recording[]} List of all the available recordings
  */
 async function getWebexRecordings(webexObject) {
-    logger.debug('Get recordings');
+    logger.debug(`[${webexObject.webexCourseId}] Get recordings`);
     const res = await axios.get('https://lti.educonnector.io/api/webex/recordings', {
         headers: {
             'Cookie': webexObject.cookies,
@@ -173,6 +185,7 @@ async function eventRecordingPassword(res, password) {
  * @param {string} fileUrl The webex recording file url from which the download procedure started
  */
 async function meetingRecordingPassword(res, password, fileUrl) {
+    let resultResponse;
     logger.debug('Meeting recording');
 
     // Check if password is required
@@ -191,30 +204,29 @@ async function meetingRecordingPassword(res, password, fileUrl) {
 
         // Check recordingpasswordcheck.do
         logger.debug('Checking params with recordingpasswordcheck.do');
-        res = await axios.post(actionUrl.toString(), params, {
+        resultResponse = await axios.post(actionUrl.toString(), params, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'User-Agent': 'Mozilla/5.0'
             },
         });
-
-        // parse params for nbrshared.do in response
-        let url = new URL(res.data.match(/href=['"](http.+?nbrshared\.do.+?)['"]/)[1]);
-
-        // post to nbrshared.do
-        logger.debug('Posting to nbrshared.do');
-        res = await axios.post(url.origin + url.pathname, url.search.substring(1), {
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'Mozilla/5.0'
-            }
-        });
-        return res;
+    } else {
+        logger.debug('No password required');
+        resultResponse = res;
     }
 
-    // res is alredy the response from nbrShared
-    logger.debug('No password required');
-    return res;
+    // parse params for nbrshared.do in response
+    let url = new URL(resultResponse.data.match(/href=['"](http.+?nbrshared\.do.+?)['"]/)[1]);
+
+    // post to nbrshared.do
+    logger.debug('Posting to nbrshared.do');
+    resultResponse = await axios.post(url.origin + url.pathname, url.search.substring(1), {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'Mozilla/5.0'
+        }
+    });
+    return resultResponse;
 }
 
 /**

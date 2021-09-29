@@ -61,11 +61,11 @@ async function loginToMoodle(configs) {
  */
 async function getRecordings(course, moodleSession) {
     // Launch webex
-    const launchParameters = await getWebexLaunchOptions(moodleSession, course.id, course?.custom_webex_id);
-    if (launchParameters === null) {
+    const webexLaunch = await getWebexLaunchOptions(moodleSession, course.id, course?.custom_webex_id);
+    if (webexLaunch.webexCourseId === null) {
         logger.warn('└─ Webex id not found... Skipping');
     }
-    const webexObject = await launchWebex(launchParameters);
+    const webexObject = await launchWebex(webexLaunch);
 
     // Get recordings
     const recordingsAll = await getWebexRecordings(webexObject);

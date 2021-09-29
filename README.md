@@ -209,13 +209,13 @@ Try with `recording_url` at [Step 1b](#download-a-hls-stream---step-1)
 
 ### Download a recording - STEP 2a
 
-If the response of the previous step doesn't contains `recordingpasswordcheck`, the recording doesn't need a password and you can skip to [STEP 3](#download-a-recording---step-3) as if you already made the post request.
+If the response of the previous step doesn't contains `recordingpasswordcheck`, the recording doesn't need a password and you can skip to [STEP 3](#download-a-recording---step-3).
 
 Otherwise follow along...
 
 Get all `name` and `values` attributes from the input tags.
 
-Note that you may need to change `firstEntry` to false since the js does it here:
+Note that you may need to change `firstEntry` to false since the js does it there:
 
 ```js
 document.forms[0].firstEntry.value=false;
@@ -224,8 +224,6 @@ document.forms[0].firstEntry.value=false;
 > POST <https://unifirenze.webex.com/svc3300/svccomponents/servicerecordings/recordingpasswordcheck.do>
 
 The body should contain the input attributes from the previous request and the password of the recording
-
-Then match `var href='https://unifirenze.webex.com/mw3300/mywebex/nbrshared.do?siteurl=unifirenze-en&action=publishfile&recordID=***&serviceRecordID=***&recordKey=***';`
 
 Goto [STEP 3](#download-a-recording---step-3)
 
@@ -284,6 +282,10 @@ Parse from the response the following fields:
 [STEP 3](#download-a-recording---step-3)
 
 ### Download a recording - STEP 3
+
+From the previous request match `var href='https://unifirenze.webex.com/mw3300/mywebex/nbrshared.do?siteurl=unifirenze-en&action=publishfile&recordID=***&serviceRecordID=***&recordKey=***';`
+
+Parse the url arguments and make the following request.
 
 > POST `https://unifirenze.webex.com/mw3300/mywebex/nbrshared.do`
 >
