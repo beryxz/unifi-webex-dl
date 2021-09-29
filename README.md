@@ -188,7 +188,7 @@ There are recordings of `Meetings` and recordings of `Events`.
 These two share only the last part of the process.
 
 The program first tries to download the files using the download function available in webex.
-But, since it can be disabled, in case it has been disabled, it tries to download the HLS stream using the streaming function of webex.
+But, since it can be disabled, if it has been disabled, it tries to download the HLS stream using the streaming function of webex.
 
 Start off with [Step 1a](#download-a-recording---step-1a)
 
@@ -197,21 +197,11 @@ Start off with [Step 1a](#download-a-recording---step-1a)
 > GET `file_url`
 
 1. If the response matches `Error` then, there's been an error. Probably the recording has been deleted or isn't available at the moment.
-Try with `recording_url` at [Step 1b](#download-a-recording---step-1b)
+Try with `recording_url` at [Step 1b](#download-a-hls-stream---step-1)
 
 2. If the response contains `'internalRecordTicket'` then you're downloading an event. Goto [STEP 2b](#download-a-recording---step-2b)
 
 3. If none of the above then you're downloading a meeting. Goto [STEP 2a](#download-a-recording---step-2a)
-
-### Download a recording - STEP 1b
-
-> GET `recording_url`
-
-1. If the response matches `Error` then, there's been an error. This recording will be `Skipped`
-
-2. If the response contains `'internalRecordTicket'` then you're downloading an event. This is a `WIP` since i never found an event recording with download disabled. Fell free to open an Issue to solve this.
-
-3. If none of the above then you're downloading a meeting. Goto [Download a HLS Stream](#download-a-hls-stream---step-2)
 
 ### Download a recording - STEP 2a
 
@@ -344,6 +334,16 @@ Check the `status` that could be one of the following [`OKOK`, `Preparing`, `Err
 
 The response is the recording that can be saved as `name`.`format` (from the recording object).
 
+### Download a HLS Stream - STEP 1
+
+> GET `recording_url`
+
+1. If the response matches `Error` then, there's been an error. This recording will be `Skipped`
+
+2. If the response contains `'internalRecordTicket'` then you're downloading an event. This is a `WIP` since i never found an event recording with download disabled. Fell free to open an Issue to solve this.
+
+3. If none of the above then you're downloading a meeting. Goto [Download a HLS Stream](#download-a-hls-stream---step-2)
+
 ### Download a HLS Stream - STEP 2
 
 From the response of the `recording_url`, match the recording ID.
@@ -364,7 +364,7 @@ In the response json object save the parameter: `mp4StreamOption`
 
 ### Download a HLS Stream - STEP 3
 
-> POST <https://nln1vss.webex.com/apis/html5-pipeline.do>
+> POST <https://nfg1vss.webex.com/apis/html5-pipeline.do>
 
 In the request add the following query parameters from the `mp4StreamOption` object of the previous step:
 
@@ -388,5 +388,5 @@ From the response match `HLS_FILE`
 Use all parameters in this url and you got the HLS Playlist file to download
 
 ```js
-let playlistFile = `https://nln1vss.webex.com/hls-vod/recordingDir/${mp4StreamOption.recordingDir}/timestamp/${mp4StreamOption.timestamp}/token/${mp4StreamOption.token}/fileName/${HLS_FILE}.m3u8`
+let playlistFile = `https://nfg1vss.webex.com/hls-vod/recordingDir/${mp4StreamOption.recordingDir}/timestamp/${mp4StreamOption.timestamp}/token/${mp4StreamOption.token}/fileName/${HLS_FILE}.m3u8`
 ```

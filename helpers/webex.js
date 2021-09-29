@@ -342,7 +342,7 @@ async function getWebexRecordingHSLPlaylist(recording_url, password) {
     logger.debug('Getting playlist filename');
     let res = await axios({
         method: 'post',
-        url: 'https://nln1vss.webex.com/apis/html5-pipeline.do',
+        url: 'https://nfg1vss.webex.com/apis/html5-pipeline.do',
         headers: {
             'User-Agent': 'Mozilla/5.0'
         },
@@ -357,7 +357,7 @@ async function getWebexRecordingHSLPlaylist(recording_url, password) {
     if (playlistFilename === null)
         throw new Error('Recording file not found');
 
-    let playlistUrl = `https://nln1vss.webex.com/hls-vod/recordingDir/${mp4StreamOption.recordingDir}/timestamp/${mp4StreamOption.timestamp}/token/${mp4StreamOption.token}/fileName/${playlistFilename}.m3u8`;
+    let playlistUrl = `https://nfg1vss.webex.com/hls-vod/recordingDir/${mp4StreamOption.recordingDir}/timestamp/${mp4StreamOption.timestamp}/token/${mp4StreamOption.token}/fileName/${playlistFilename}.m3u8`;
     let filesize = (streamOptions.fileSize ?? 0) + (streamOptions.mediaDetectInfo?.audioSize ?? 0);
     logger.debug(`└─ playlistUrl: ${playlistUrl}`);
     logger.debug(`└─ filesize: ${filesize}`);
