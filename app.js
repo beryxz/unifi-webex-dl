@@ -117,13 +117,13 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
             }
 
             // Download was successful, move rec to destination
-            logger.debug(`[${downloadName}] Moving file out of tmp folder`);
+            // logger.debug(`[${downloadName}] Moving file out of tmp folder`);
             try {
                 renameSync(tmpDownloadPath, downloadPath);
             } catch (err) {
                 if (err.code === 'EXDEV') {
                     // Cannot move files that are not in the top OverlayFS layer (e.g.: inside volumes)
-                    logger.debug(`[${downloadName}] Probably inside a Docker container, falling back to copy-and-unlink`);
+                    // logger.debug(`[${downloadName}] Probably inside a Docker container, falling back to copy-and-unlink`);
                     const fileContents = readFileSync(tmpDownloadPath);
                     writeFileSync(downloadPath, fileContents);
                     unlinkSync(tmpDownloadPath);
