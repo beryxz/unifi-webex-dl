@@ -212,6 +212,11 @@ async function meetingRecordingPassword(res, password, fileUrl) {
         });
     } else {
         logger.debug('No password required');
+
+        // Refer to README. Sometimes, when no password is required, the response is already the output of `nbrshared`.
+        if (!res.data.includes('commonGet2PostForm'))
+            return res;
+
         resultResponse = res;
     }
 

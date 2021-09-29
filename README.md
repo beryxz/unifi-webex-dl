@@ -209,7 +209,7 @@ Try with `recording_url` at [Step 1b](#download-a-hls-stream---step-1)
 
 ### Download a recording - STEP 2a
 
-If the response of the previous step doesn't contains `recordingpasswordcheck`, the recording doesn't need a password and you can skip to [STEP 3](#download-a-recording---step-3).
+If the response of the previous step doesn't contains `recordingpasswordcheck`, the recording doesn't need a password and you can skip to [STEP 3](#download-a-recording---step-3). Additionally, if the response doesn't contains "commonGet2PostForm", then skip to STEP 3 after the first request to `nbrshared.do`.
 
 Otherwise follow along...
 
