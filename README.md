@@ -8,7 +8,7 @@
 
 ## Quick Start
 
-Install project dependencies: `npm install`
+Install project dependencies: `npm ci`
 
 Copy `config.example.json` to `config.json` and change credentials and courses ids accordingly.
 
@@ -21,6 +21,10 @@ If you are on linux and have docker, you can execute the `docker.sh` to automati
 Note a few things:
 - Make sure to use the same UID and GID of your user in the `Dockerfile`. By default they are both set to 1000;
 - If you use `.yaml` configs instead of `.json`, change the extension accordingly in `docker.sh`
+
+## To update
+
+When you pull new updates, remember to update project dependencies using `npm ci`.
 
 ## Config
 
