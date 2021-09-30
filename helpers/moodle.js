@@ -5,7 +5,15 @@ const logger = require('./logging')('moodle');
 const { checkMoodleCookie } = require('./cookie');
 
 /**
- * Old way of Logging into the Moddle platform.
+ * @typedef WebexLaunchOptions
+ * @type {object}
+ * @property {string|null} launchParameters Parameters to set in the post request to launch webex. Should be 'null' if webex course id is also 'null'
+ * @property {string} webexCourseId Id of the course on Webex
+ * @property {string} moodleCourseId Id of the course on Moodle
+ */
+
+/**
+ * Old way of Logging into the Moodle platform.
  * @deprecated since version 4.0.0
  * @param {string} username Moodle username
  * @param {string} password Moodle password
@@ -58,7 +66,7 @@ async function loginMoodle(username, password) {
 }
 
 /**
- * Login into Moddle platform through the "Autenticazione Unica UniFi" portal.
+ * Login into Moodle platform through the "Autenticazione Unica UniFi" portal.
  * @param {string} username Moodle username
  * @param {string} password Moodle password
  * @returns {string} Moodle session token cookie
@@ -179,7 +187,7 @@ async function getWebexId(sessionToken, courseId) {
  * @param {string} sessionToken MoodleSession cookie used to authenticate
  * @param {number} courseId Course id from which to retrieve webexId and then the relative launch parameters
  * @param {string|number} [customWebexId=null] Custom Webex id that override the one found in the course page, if defined
- * @return {string|null} Parameters to set in the post request to launch webex. null if webex course id couldn't be found.
+ * @return {WebexLaunchOptions}
  */
 async function getWebexLaunchOptions(sessionToken, courseId, customWebexId=null) {
     try {
@@ -188,11 +196,10 @@ async function getWebexLaunchOptions(sessionToken, courseId, customWebexId=null)
         if (customWebexId == null || customWebexId == undefined) {
             webexId = await getWebexId(sessionToken, courseId);
             if (webexId === null)
-                return null;
+                return { launchParameters: null, webexCourseId: null };
         } else {
             webexId = customWebexId;
         }
-        logger.debug(`Webex id: ${webexId}`);
 
         // Get launch parameters
         const res = await axios.get('https://e-l.unifi.it/mod/lti/launch.php', {
@@ -205,13 +212,21 @@ async function getWebexLaunchOptions(sessionToken, courseId, customWebexId=null)
             }
         });
 
+        const launchParameters = cheerio.load(res.data)('form').serialize();
+        const moodleCourseId = launchParameters.match(/context_id=(\d+)/)?.[1];
+        logger.debug(`Webex id: ${moodleCourseId} -> ${webexId}`);
+
         // Convert the html form in urlencoded string for post body
-        return cheerio.load(res.data)('form').serialize();
+        return {
+            launchParameters: launchParameters,
+            moodleCourseId: moodleCourseId,
+            webexCourseId: webexId
+        };
     } catch (err) {
         throw new Error(`Error while loading launch options for webex. ${err.message}`);
     }
 }
 
 module.exports = {
-    loginMoodleUnifiedAuth, getCourseName, getWebexLaunchOptions
+    loginMoodle, loginMoodleUnifiedAuth, getCourseName, getWebexLaunchOptions
 };

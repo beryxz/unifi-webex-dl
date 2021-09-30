@@ -3,6 +3,42 @@ const logger = require('./logging')('config');
 const yaml = require('yaml');
 
 /**
+ * @typedef Course
+ * @type {object}
+ * @property {string} id
+ * @property {string} name
+ * @property {string} custom_webex_id
+ * @property {string} skip_names
+ * @property {string} skip_before_date
+ * @property {string} skip_after_date
+ * @property {boolean} prepend_date
+ */
+
+/**
+ * @typedef ConfigDownload
+ * @type {object}
+ * @property {string} base_path
+ * @property {boolean} progress_bar
+ * @property {boolean} show_existing
+ * @property {number} max_concurrent_downloads
+ */
+
+/**
+ * @typedef ConfigCredentials
+ * @type {object}
+ * @property {string} username
+ * @property {string} password
+ */
+
+/**
+ * @typedef Config
+ * @type {object}
+ * @property {ConfigCredentials} credentials
+ * @property {ConfigDownload} download
+ * @property {Course[]} courses
+ */
+
+/**
  * Check whether the given object is undefined, null, empty string or empty object
  * @param {any} object to entity to check
  */
@@ -67,6 +103,7 @@ function parseConfigFile(configPath) {
 /**
  * Read configs from file and/or env variables if set.
  * @param {string} configPath
+ * @return {Config} Configs object
  */
 async function load(configPath) {
     logger.debug(`Loading ${configPath}`);
@@ -81,6 +118,7 @@ async function load(configPath) {
         base_path = (process.env['DOWNLOAD__BASE_PATH']) || config.download?.base_path,
         progress_bar = ((process.env['DOWNLOAD__PROGRESS_BAR']) || config.download?.progress_bar) ?? true,
         show_existing = ((process.env['DOWNLOAD__SHOW_EXISTING']) || config.download?.show_existing) ?? true,
+        max_concurrent_downloads = ((process.env['DOWNLOAD__MAX_CONCURRENT_DOWNLOADS']) || config.download?.max_concurrent_downloads) ?? 3,
         courses;
 
     // Work on course objects
@@ -106,7 +144,8 @@ async function load(configPath) {
         download: {
             base_path,
             progress_bar: !!progress_bar,
-            show_existing: !!show_existing
+            show_existing: !!show_existing,
+            max_concurrent_downloads
         },
         courses
     };

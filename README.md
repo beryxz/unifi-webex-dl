@@ -1,6 +1,6 @@
 # UNIFI-WEBEX-DL
 
-> Download recorded lessons from unifi webex platform passing by the Moodle platform.
+> Download recorded lessons from UniFi's Webex platform passing by the Moodle platform.
 
 ## Requirements
 
@@ -8,7 +8,7 @@
 
 ## Quick Start
 
-Install project dependencies: `npm install`
+Install project dependencies: `npm ci`
 
 Copy `config.example.json` to `config.json` and change credentials and courses ids accordingly.
 
@@ -16,11 +16,20 @@ Run the app with: `npm start`
 
 ## [Optional] Quick Start with Docker
 
-If you are on linux and have docker, you can execute the `docker.sh` to automatically execute the downloader inside of a container.
+Suppose you are on Linux and have docker. In that case, you can execute the `docker.sh` to automatically execute the downloader inside of a container.
 
 Note a few things:
-- Make sure to use the same UID and GID of your user in the `Dockerfile`. By default they are both set to 1000;
+
+- Make sure to use the same UID and GID of your user in the `Dockerfile`. By default, they are both set to 1000;
 - If you use `.yaml` configs instead of `.json`, change the extension accordingly in `docker.sh`
+
+## PLEASE NOTE
+
+When you pull new updates, remember to update project dependencies using `npm ci`.
+
+If a recording gives you an error, verify on Webex that it can actually be opened before opening an issue. Recordings could be disabled by the course organizer.
+
+If you get a `429 Error`, it means that Webex received too many requests. In this case, you should wait sometime before trying again.
 
 ## Config
 
@@ -28,7 +37,7 @@ Note a few things:
 
 Currently, both **.json** and **.yaml** file are supported, json being the default one.
 
-Default config file path is `config.json` inside of the root directory, you can change it with the environment variable `CONFIG_PATH`.
+The default config file path is `config.json` inside the root directory; you can change it with the environment variable `CONFIG_PATH`.
 
 ### Credentials
 
@@ -40,14 +49,15 @@ Default config file path is `config.json` inside of the root directory, you can 
 - `base_path`: path in which to download recordings
 - `progress_bar`: (Optional) boolean to set whether or not to show a progress bar while downloading the recordings. Defaults to `true`
 - `show_existing`: (Optional) boolean to set whether or not to show already downloaded recordings. Defaults to `true`
+- `max_concurrent_downloads`: (Optional) maximum number of parallel downloads. Defaults to `3`
 
 ### Courses
 
 > Array of objects, one for each course. The object contains:
 
-- `id` string: id of the course shown in the url bar of Moodle
+- `id` string: id of the course shown in the URL bar of Moodle
 - `name` string: prepended to the folder name and also shown in the logs
-- `custom_webex_id` string: (Optional) manually set the id of the webex page instead of trying to match it from the course page
+- `custom_webex_id` string: (Optional) manually set the id of the Webex page instead of trying to match it from the course page
 - `skip_names` string: (Optional) regex to match recordings names to skip. Exclude slashes and flags from strings. E.g. `'test'` and NOT `'/test/i'`
 - `skip_before_date` string: (Optional) skip recordings before the date `YYYY-MM-DD`
 - `skip_after_date` string: (Optional) skip recordings after the date `YYYY-MM-DD`
@@ -55,13 +65,13 @@ Default config file path is `config.json` inside of the root directory, you can 
 
 ## Environment variables
 
-The app tries to be as docker friendly as possible.
+The app tries to be as docker-friendly as possible.
 
-In alternative the configs may be specified using environment variables. Just convert the config names to uppercase. In case of nested properties, separate them with two underscores.
+In fact, as an alternative, the configs may all be specified using environment variables. Just convert the config names to uppercase. In the case of nested properties, separate them with two underscores.
 
 E.g. `credentials.username` => `CREDENTIALS__USERNAME`; `download.base_path` => `DOWNLOAD__BASE_PATH`
 
-Courses can also be specified through the `COURSES` env variable using the following format although limited to only `id` and `name`:
+Courses can also be specified through the `COURSES` env variable using the following format, although limited to only `id` and `name`:
 
 `COURSE_ID=COURSE_NAME,12003=WhiteRabbit`
 
@@ -71,17 +81,17 @@ To modify the default log level of 'info', set the env variable `LOG_LEVEL` with
 
 ## Known issues
 
-If you download an event recording that doesn't ask for password, it probably won't work. This case never occurred in my testing. Feel free to open an issue to let me know what happens.
+If you download an event recording that doesn't ask for a password, it probably won't work. This case never occurred in my testings. Feel free to open an issue to let me know what happens.
 
 ## How it works
 
-Unfortunately, UniFi Moodle doesn't make use of rest apis. So we have to do a bit of guessing and matching on the response body.
+Unfortunately, UniFi Moodle doesn't make use of REST APIs. So we have to do a bit of guessing and matching on the response body.
 
-This approach works for now but is prone to errors and stop working if something get changed. Feel free to open an issue or a PR to update the process.
+This approach works for now but is prone to errors and will stop working if things change. Feel free to open an issue or a PR to report these changes.
 
 ### Login to Moodle
 
-_As of March 2021 they use this new unified authentication system for accessing their services._
+_As of March 2021, they use this new unified authentication system for accessing their services._
 
 > GET <https://identity.unifi.it/cas/login?service=https://e-l.unifi.it/login/index.php?authCASattras=CASattras>
 
@@ -107,21 +117,21 @@ The request body should match the following format:
 }
 ```
 
-If the credentials are wrong a status code `401` should be returned from the POST request.
+If the credentials are wrong, a status code `401` should be returned from the POST request.
 
-Otherwise, follow the `Location` header that should have a ticket in the url parameters.
+Otherwise, follow the `Location` header that should have a ticket in the URL parameters.
 
-Set `MoodleSession` Cookie from Set-Cookie response header and follow again the `Location` header.
+Set `MoodleSession` Cookie from the Set-Cookie response header and follow the `Location` header again.
 
-Finally, get the authenticated `MoodleSession` Cookie from Set-Cookie response header.
+Finally, get the authenticated `MoodleSession` Cookie from the Set-Cookie response header.
 
 ### Get Webex Id
 
-To launch webex we have to get the webex id relative to the moodle course id.
+To launch Webex, we have to get the Webex course id relative to the moodle course id.
 
 > GET <https://e-l.unifi.it/course/view.php?id=42>
 
-In the body match the launch url:
+In the body, match the launch URL:
 
 - `https://e-l.unifi.it/mod/lti/launch.php?id=***`
 
@@ -133,7 +143,7 @@ Retrieve the id parameter
 >
 > Cookie: MoodleSession
 
-Serialize from the html body all the name attributes in input tags
+Serialize from the HTML body all the name attributes in input tags
 
 ### Launch Webex
 
@@ -180,14 +190,14 @@ The response is an array of objects like the following
 
 ### Download a recording - STEP 1
 
-Before starting, it's important to understand that there are two types of recordings.
+Before starting, it's essential to understand that there are two types of recordings.
 
 There are recordings of `Meetings` and recordings of `Events`.
 
-These two share only the last part of the process.
+This two share only the last part of the process.
 
-The program first tries to download the files using the download function available in webex.
-But, since it can be disabled, in case it has been disabled, it tries to download the HLS stream using the streaming function of webex.
+The program first tries to download the files using the download function available in Webex.
+But, if it has been disabled, it tries to download the HLS stream using the streaming functionality of Webex.
 
 Start off with [Step 1a](#download-a-recording---step-1a)
 
@@ -196,31 +206,21 @@ Start off with [Step 1a](#download-a-recording---step-1a)
 > GET `file_url`
 
 1. If the response matches `Error` then, there's been an error. Probably the recording has been deleted or isn't available at the moment.
-Try with `recording_url` at [Step 1b](#download-a-recording---step-1b)
+Try with `recording_url` at [Step 1b](#download-a-hls-stream---step-1)
 
 2. If the response contains `'internalRecordTicket'` then you're downloading an event. Goto [STEP 2b](#download-a-recording---step-2b)
 
-3. If none of the above then you're downloading a meeting. Goto [STEP 2a](#download-a-recording---step-2a)
-
-### Download a recording - STEP 1b
-
-> GET `recording_url`
-
-1. If the response matches `Error` then, there's been an error. This recording will be `Skipped`
-
-2. If the response contains `'internalRecordTicket'` then you're downloading an event. This is a `WIP` since i never found an event recording with download disabled. Fell free to open an Issue to solve this.
-
-3. If none of the above then you're downloading a meeting. Goto [Download a HLS Stream](#download-a-hls-stream---step-2)
+3. If none of the above, then you're downloading a meeting. Goto [STEP 2a](#download-a-recording---step-2a)
 
 ### Download a recording - STEP 2a
 
-If the response of the previous step doesn't contains `recordingpasswordcheck`, the recording doesn't need a password and you can skip to [STEP 3](#download-a-recording---step-3) as if you already made the post request.
+If the response of the previous step doesn't contain `recordingpasswordcheck`, the recording doesn't need a password, and you can skip to [STEP 3](#download-a-recording---step-3). Also, note that if the response doesn't contain "commonGet2PostForm", you should instead skip to STEP 3 after the first request to `nbrshared.do`.
 
-Otherwise follow along...
+Otherwise, follow along...
 
 Get all `name` and `values` attributes from the input tags.
 
-Note that you may need to change `firstEntry` to false since the js does it here:
+Note that you may need to change `firstEntry` to false since the js does it there:
 
 ```js
 document.forms[0].firstEntry.value=false;
@@ -228,9 +228,7 @@ document.forms[0].firstEntry.value=false;
 
 > POST <https://unifirenze.webex.com/svc3300/svccomponents/servicerecordings/recordingpasswordcheck.do>
 
-The body should contain the input attributes from the previous request and the password of the recording
-
-Then match `var href='https://unifirenze.webex.com/mw3300/mywebex/nbrshared.do?siteurl=unifirenze-en&action=publishfile&recordID=***&serviceRecordID=***&recordKey=***';`
+The body should contain the input attributes from the previous request and the password of the recording.
 
 Goto [STEP 3](#download-a-recording---step-3)
 
@@ -248,7 +246,7 @@ Serialize the form inputs and:
 >
 > Content-Type: application/x-www-form-urlencoded
 
-Save cookies from response header.
+Save cookies from the response header.
 
 Parse from the response the following fields:
 
@@ -261,7 +259,7 @@ Parse from the response the following fields:
 >
 > Content-Type: application/x-www-form-urlencoded
 >
-> Cookie: From previous step
+> Cookie: From the previous step
 
 Request body:
 
@@ -289,6 +287,10 @@ Parse from the response the following fields:
 [STEP 3](#download-a-recording---step-3)
 
 ### Download a recording - STEP 3
+
+From the previous request match `var href='https://unifirenze.webex.com/mw3300/mywebex/nbrshared.do?siteurl=unifirenze-en&action=publishfile&recordID=***&serviceRecordID=***&recordKey=***';`
+
+Parse the URL arguments and make the following request.
 
 > POST `https://unifirenze.webex.com/mw3300/mywebex/nbrshared.do`
 >
@@ -328,7 +330,7 @@ Match the following part
 
 Match `window.parent.func_prepare('***','***','***');`
 
-This is the function declaration `func_prepare(status, url, ticket)` that I'll reefer to.
+This is the function declaration `func_prepare(status, url, ticket)` that I'll refer to.
 
 Check the `status` that could be one of the following [`OKOK`, `Preparing`, `Error`, "null if bug?"]
 
@@ -343,6 +345,16 @@ Check the `status` that could be one of the following [`OKOK`, `Preparing`, `Err
 
 The response is the recording that can be saved as `name`.`format` (from the recording object).
 
+### Download a HLS Stream - STEP 1
+
+> GET `recording_url`
+
+1. If the response matches `Error` then, there's been an error. This recording will be `Skipped`
+
+2. If the response contains `'internalRecordTicket'`, then you're downloading an event. This is a `WIP` since I never found an event recording with download disabled. Feel free to open an Issue to solve this.
+
+3. If none of the above, then you're downloading a meeting. Goto [Download a HLS Stream](#download-a-hls-stream---step-2)
+
 ### Download a HLS Stream - STEP 2
 
 From the response of the `recording_url`, match the recording ID.
@@ -353,19 +365,19 @@ location.href='https://unifirenze.webex.com/recordingservice/sites/unifirenze/re
 
 > GET <https://unifirenze.webex.com/webappng/api/v1/recordings/RECORDING_ID/stream?siteurl=unifirenze>
 
-In the request also add the following custom header
+In the request, also add the following custom header
 
 `accessPwd: RECORDING_PASSWORD`
 
-In the response json object save the parameter: `mp4StreamOption`
+In the response JSON object, save the parameter: `mp4StreamOption`
 
 **Optionally**: if you wanna get the approximate filesize, sum `fileSize` with `mediaDetectInfo.audioSize`
 
 ### Download a HLS Stream - STEP 3
 
-> POST <https://nln1vss.webex.com/apis/html5-pipeline.do>
+> POST <https://nfg1vss.webex.com/apis/html5-pipeline.do>
 
-In the request add the following query parameters from the `mp4StreamOption` object of the previous step:
+In the request, add the following query parameters from the `mp4StreamOption` object of the previous step:
 
 ```json
 {
@@ -384,8 +396,8 @@ From the response match `HLS_FILE`
 </Screen>
 ```
 
-Use all parameters in this url and you got the HLS Playlist file to download
+Use all parameters in this URL, and you get the HLS Playlist file to download
 
 ```js
-let playlistFile = `https://nln1vss.webex.com/hls-vod/recordingDir/${mp4StreamOption.recordingDir}/timestamp/${mp4StreamOption.timestamp}/token/${mp4StreamOption.token}/fileName/${HLS_FILE}.m3u8`
+let playlistFile = `https://nfg1vss.webex.com/hls-vod/recordingDir/${mp4StreamOption.recordingDir}/timestamp/${mp4StreamOption.timestamp}/token/${mp4StreamOption.token}/fileName/${HLS_FILE}.m3u8`
 ```

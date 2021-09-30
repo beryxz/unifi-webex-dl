@@ -5,14 +5,39 @@ const qs = require('qs');
 const { getCookies } = require('./cookie');
 
 /**
- * Launch the webex platform and retrieve the JWT and Cookies
- * @param {string} launchParameters urlencoded string to send as post body to access webex
- * @returns {Object} { jwt, cookies }
+ * @typedef Recording
+ * @type {object}
+ * @property {number} id
+ * @property {string} name
+ * @property {string} created_at
+ * @property {string} updated_at
+ * @property {string} recording_url
+ * @property {string} timezone
+ * @property {number} duration_hour
+ * @property {number} duration_min
+ * @property {number} duration_sec
+ * @property {string} file_url
+ * @property {string} format
+ * @property {string} password
  */
-async function launchWebex(launchParameters) {
+
+/**
+ * @typedef WebexLaunchObject
+ * @type {object}
+ * @property {string} webexCourseId Id of the course on webex
+ * @property {string} launchParameters urlencoded string to send as post body to access webex
+ * @property {string} cookies Session cookies to call webex endpoints
+ */
+
+/**
+ * Launch the webex platform and retrieve the JWT and Cookies
+ * @param {import('./moodle').WebexLaunchOptions} webexLaunchOptions
+ * @returns {WebexLaunchObject}
+ */
+async function launchWebex(webexLaunchOptions) {
     try {
-        logger.debug('Launching Webex');
-        const res = await axios.post('https://lti.educonnector.io/launches', launchParameters, {
+        logger.debug(`[${webexLaunchOptions.webexCourseId}] Launching Webex`);
+        const res = await axios.post('https://lti.educonnector.io/launches', webexLaunchOptions.launchParameters, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'User-Agent': 'Mozilla/5.0'
@@ -31,7 +56,11 @@ async function launchWebex(launchParameters) {
         // logger.debug(`├─ jwt: ${jwt}`);
         // logger.debug(`└─ cookies: ${cookies}`);
 
-        return { cookies: cookies };
+        return {
+            webexCourseId: webexLaunchOptions.webexCourseId,
+            launchParameters: webexLaunchOptions.launchParameters,
+            cookies: cookies
+        };
     } catch (err) {
         throw new Error(`Couldn't launch webex. ${err.message}`);
     }
@@ -39,11 +68,11 @@ async function launchWebex(launchParameters) {
 
 /**
  * Get all available recordings for the given webex course
- * @param {Object} webexObject Object with { cookies }
- * @returns {Array} List of all the available recordings
+ * @param {WebexLaunchObject} webexObject Required to interact with webex endpoints
+ * @returns {Recording[]} List of all the available recordings
  */
 async function getWebexRecordings(webexObject) {
-    logger.debug('Get recordings');
+    logger.debug(`[${webexObject.webexCourseId}] Get recordings`);
     const res = await axios.get('https://lti.educonnector.io/api/webex/recordings', {
         headers: {
             'Cookie': webexObject.cookies,
@@ -156,6 +185,7 @@ async function eventRecordingPassword(res, password) {
  * @param {string} fileUrl The webex recording file url from which the download procedure started
  */
 async function meetingRecordingPassword(res, password, fileUrl) {
+    let resultResponse;
     logger.debug('Meeting recording');
 
     // Check if password is required
@@ -174,30 +204,34 @@ async function meetingRecordingPassword(res, password, fileUrl) {
 
         // Check recordingpasswordcheck.do
         logger.debug('Checking params with recordingpasswordcheck.do');
-        res = await axios.post(actionUrl.toString(), params, {
+        resultResponse = await axios.post(actionUrl.toString(), params, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'User-Agent': 'Mozilla/5.0'
             },
         });
+    } else {
+        logger.debug('No password required');
 
-        // parse params for nbrshared.do in response
-        let url = new URL(res.data.match(/href=['"](http.+?nbrshared\.do.+?)['"]/)[1]);
+        // Refer to README. Sometimes, when no password is required, the response is already the output of `nbrshared`.
+        if (!res.data.includes('commonGet2PostForm'))
+            return res;
 
-        // post to nbrshared.do
-        logger.debug('Posting to nbrshared.do');
-        res = await axios.post(url.origin + url.pathname, url.search.substring(1), {
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'Mozilla/5.0'
-            }
-        });
-        return res;
+        resultResponse = res;
     }
 
-    // res is alredy the response from nbrShared
-    logger.debug('No password required');
-    return res;
+    // parse params for nbrshared.do in response
+    let url = new URL(resultResponse.data.match(/href=['"](http.+?nbrshared\.do.+?)['"]/)[1]);
+
+    // post to nbrshared.do
+    logger.debug('Posting to nbrshared.do');
+    resultResponse = await axios.post(url.origin + url.pathname, url.search.substring(1), {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'Mozilla/5.0'
+        }
+    });
+    return resultResponse;
 }
 
 /**
@@ -254,9 +288,9 @@ async function getWebexRecordingDownloadUrl(fileUrl, password) {
         });
         // parse `window.parent.func_prepare(status, url, ticket)'
         let groups = res.data.match(/func_prepare\(['"](.*?)['"],['"](.*?)['"],['"](.*?)['"]\);/);
-        params = { status: groups[1], url: groups[2], ticket: groups[3]};
-        if (groups === null || !['OKOK', 'Preparing'].includes(params.status))
+        if (groups === null || !['OKOK', 'Preparing'].includes(groups[1]))
             throw new Error('Unknown error while waiting for recording to be ready');
+        params = { status: groups[1], url: groups[2], ticket: groups[3]};
         logger.debug(`├─ status: ${params.status}`);
         logger.debug(`├─ url: ${params.url}`);
         logger.debug(`└─ ticket: ${params.ticket}`);
@@ -268,8 +302,8 @@ async function getWebexRecordingDownloadUrl(fileUrl, password) {
             return downloadUrl + params.ticket;
         }
 
-        logger.debug('Recording not ready, waiting 3s...');
-        await new Promise(r => setTimeout(r, 3000));
+        logger.debug('Recording not ready, waiting 1s...');
+        await new Promise(r => setTimeout(r, 1000));
     }
 }
 
@@ -325,7 +359,7 @@ async function getWebexRecordingHSLPlaylist(recording_url, password) {
     logger.debug('Getting playlist filename');
     let res = await axios({
         method: 'post',
-        url: 'https://nln1vss.webex.com/apis/html5-pipeline.do',
+        url: 'https://nfg1vss.webex.com/apis/html5-pipeline.do',
         headers: {
             'User-Agent': 'Mozilla/5.0'
         },
@@ -340,7 +374,7 @@ async function getWebexRecordingHSLPlaylist(recording_url, password) {
     if (playlistFilename === null)
         throw new Error('Recording file not found');
 
-    let playlistUrl = `https://nln1vss.webex.com/hls-vod/recordingDir/${mp4StreamOption.recordingDir}/timestamp/${mp4StreamOption.timestamp}/token/${mp4StreamOption.token}/fileName/${playlistFilename}.m3u8`;
+    let playlistUrl = `https://nfg1vss.webex.com/hls-vod/recordingDir/${mp4StreamOption.recordingDir}/timestamp/${mp4StreamOption.timestamp}/token/${mp4StreamOption.token}/fileName/${playlistFilename}.m3u8`;
     let filesize = (streamOptions.fileSize ?? 0) + (streamOptions.mediaDetectInfo?.audioSize ?? 0);
     logger.debug(`└─ playlistUrl: ${playlistUrl}`);
     logger.debug(`└─ filesize: ${filesize}`);
