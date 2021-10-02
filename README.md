@@ -1,4 +1,4 @@
-# UNIFI-WEBEX-DL
+# unifi-webex-dl
 
 > Download recorded lessons from UniFi's Webex platform passing by the Moodle platform.
 
@@ -10,7 +10,7 @@
 
 Install project dependencies: `npm ci`
 
-Copy `config.example.json` to `config.json` and change credentials and courses ids accordingly.
+Copy `config.example.json` to a new file named `config.json` and change credentials and courses ids accordingly.
 
 Run the app with: `npm start`
 
@@ -28,6 +28,8 @@ Note a few things:
 When you pull new updates, remember to update project dependencies using `npm ci`.
 
 If a recording gives you an error, verify on Webex that it can actually be opened before opening an issue. Recordings could be disabled by the course organizer.
+
+If a recording doesn't seem to have the audio while reproducing it with the Windows Media Player, it's a known issue. Try with a different player and it should work.
 
 If you get a `429 Error`, it means that Webex received too many requests. In this case, you should wait sometime before trying again.
 
@@ -53,7 +55,9 @@ The default config file path is `config.json` inside the root directory; you can
 
 ### Courses
 
-> Array of objects, one for each course. The object contains:
+> Array of objects, one for each course. The object contains the following fields.
+
+Please note that on Windows the `name` field shouldn't contain any of the not allowed characters, such as `: " *`. It is therefore recommended to keep the name simple using only letters, numbers, hyphens, and underscores.
 
 - `id` string: id of the course shown in the URL bar of Moodle
 - `name` string: prepended to the folder name and also shown in the logs

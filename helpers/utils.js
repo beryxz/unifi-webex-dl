@@ -20,6 +20,27 @@ function splitArrayInChunksOfFixedLength(sourceArray, chunkLength) {
     return chunks;
 }
 
+/**
+ * Check whether the given object is undefined, null, empty string or empty object
+ * @param {any} object to entity to check
+ */
+function isNone(object) {
+    return typeof object === 'undefined' || object === null || object === '' || object === {};
+}
+
+/**
+ * Check if the filename contains any characters what Windows consider reserved,
+ * and can't therefore be used in files and folders names.
+ * @param {string} filename
+ * @returns {boolean} true if it the filename doesn't contain any reserved char. false otherwise
+ */
+function isFilenameValidOnWindows(filename) {
+    // eslint-disable-next-line no-control-regex
+    return !( /[<>:"/\\|?*\x00-\x1F\r\n]/.test(filename) || /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(filename) );
+}
+
 module.exports = {
-    splitArrayInChunksOfFixedLength
+    splitArrayInChunksOfFixedLength,
+    isNone,
+    isFilenameValidOnWindows
 };

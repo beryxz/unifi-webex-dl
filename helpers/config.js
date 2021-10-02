@@ -1,4 +1,5 @@
 const { existsSync, readFileSync } = require('fs');
+const { isNone, isFilenameValidOnWindows } = require('./utils');
 const logger = require('./logging')('config');
 const yaml = require('yaml');
 
@@ -39,14 +40,6 @@ const yaml = require('yaml');
  */
 
 /**
- * Check whether the given object is undefined, null, empty string or empty object
- * @param {any} object to entity to check
- */
-function isNone(object) {
-    return typeof object === 'undefined' || object === null || object === '' || object === {};
-}
-
-/**
  * Assert that every config isn't undefined or null
  * @param {Object} configs Object of configs
  * @throws Error with erroneous config
@@ -66,6 +59,15 @@ function checkCourses(courses) {
     for (const c of courses) {
         if (isNone(c.id))
             throw new Error('Invalid config file. A course is missing the \'id\'');
+        if (typeof(c.id) !== 'number')
+            throw new Error('Invalid config file. A course\'s \'id\' is not a number');
+        if (isNone(c.name))
+            throw new Error(`Invalid config file. The [${c.id}] course is missing the 'name'`);
+        if (typeof(c.name) !== 'string')
+            throw new Error(`Invalid config file. The [${c.id}] course's 'name' is not a string`);
+
+        if (!isFilenameValidOnWindows(c.name))
+            logger.warn(`The [${c.id}] course has a 'name' which contains Windows reserved chars. On Windows this won't work!`);
     }
 }
 
