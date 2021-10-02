@@ -155,7 +155,7 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
 
         for (const recording of chunk) {
             // filename
-            let filename = `${recording.name}.${recording.format}`.replace(/[\\/:"*?<>| ]/g, '_');
+            let filename = `${recording.name}.${recording.format}`.replace(/[\\/:"*?<>| \r\n]/g, '_');
             if (course.prepend_date)
                 filename = `${getUTCDateTimestamp(recording.created_at, '')}-${filename}`;
 
@@ -164,6 +164,7 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
                 downloadConfigs.base_path,
                 course.name ? `${course.name}_${course.id}` : `${course.id}`
             );
+
             let downloadPath = join(folderPath, filename);
             let tmpDownloadPath = join('./tmp/', filename);
             try {
