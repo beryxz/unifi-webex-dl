@@ -7,9 +7,22 @@ const url = require('url');
 const { join } = require('path');
 
 /**
+ * Max retries for each segment
  * @type {number}
  */
 const RETRY_COUNT = 10;
+/**
+ * Delay before retrying each failed segment
+ * @type {number}
+ */
+const RETRY_DELAY = 200;
+/**
+ * Max number of segments downloaded simultaneously.
+ * This highly depend on the machine and the connection.
+ * A value too high can cause sudden crashes without errors.
+ * @type {number}
+ */
+const MAX_PARALLEL_SEGMENTS = 8;
 
 /**
  * @type {bytes.BytesOptions}
@@ -122,7 +135,7 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
     try {
         const segments = await parsePlaylistSegments(playlistUrl);
         const totSegments = segments.length;
-        const segmentsStatus = [];
+        let segmentsLeft = totSegments;
 
         if (multiProgressBar && showProgressBar) {
             const filesizePretty = bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9);
@@ -153,25 +166,26 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
 
                     // wait for segment to download
                     res.data.pipe(fileStream);
-                    segmentsStatus.push(new Promise((resolve) => {
-                        res.data.on('end', () => {
-                            progressBar.tick();
-                            resolve();
-                        });
-                    }));
+                    res.data.on('end', () => {
+                        progressBar.tick();
+                        segmentsLeft--;
+                    });
                 });
-            }, RETRY_COUNT, 500)
+            }, RETRY_COUNT, RETRY_DELAY)
                 .catch(() => {
                     throw new Error(`[${downloadName}] Segment ${segmentNum} failed downloading`);
                 });
 
+            if (segmentNum % MAX_PARALLEL_SEGMENTS == 0) {
+                while (segmentsLeft != totSegments - segmentNum) await sleep(100);
+            }
+
             segmentNum++;
         }
 
-        while (segmentsStatus.length < totSegments) {
-            await sleep(100);
+        while (segmentsLeft > 0) {
+            await sleep(1000);
         }
-        await Promise.all(segmentsStatus);
     } catch (err) {
         progressBar?.terminate();
         logger.error(`Error while downloading [${downloadName}]: ${err.message}`);
