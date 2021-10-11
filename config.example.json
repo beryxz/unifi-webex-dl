@@ -7,7 +7,7 @@
     "base_path": "./downloads",
     "progress_bar": true,
     "show_existing": true,
-    "max_concurrent_downloads": 3
+    "max_concurrent_downloads": 10
   },
   "courses": [
     {

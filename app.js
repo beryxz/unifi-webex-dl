@@ -1,10 +1,11 @@
 const config = require('./helpers/config');
-const { loginMoodleUnifiedAuth, getCourseName, getWebexLaunchOptions } = require('./helpers/moodle');
+const { createHash } = require('crypto');
+const { loginMoodleUnifiedAuth, getWebexLaunchOptions } = require('./helpers/moodle');
 const { launchWebex, getWebexRecordings, getWebexRecordingDownloadUrl, getWebexRecordingHSLPlaylist } = require('./helpers/webex');
 const logger = require('./helpers/logging')('app');
 const { join } = require('path');
-const { existsSync, renameSync, readdirSync, readFileSync, unlinkSync, writeFileSync } = require('fs');
-const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists } = require('./helpers/download');
+const { existsSync, renameSync, readdirSync, readFileSync, unlinkSync, writeFileSync, rmSync } = require('fs');
+const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists, mergeHLSPlaylistSegments } = require('./helpers/download');
 const { getUTCDateTimestamp } = require('./helpers/date');
 const MultiProgressBar = require('./helpers/MultiProgressBar');
 const { splitArrayInChunksOfFixedLength } = require('./helpers/utils');
@@ -37,7 +38,7 @@ async function createTempFolder() {
         await mkdirIfNotExists('./tmp');
         // remove temp files of previous executions that were abruptly interrupted
         readdirSync('./tmp').forEach(tmpfile => {
-            unlinkSync(join('./tmp/', tmpfile));
+            rmSync(join('./tmp/', tmpfile), { recursive: true, force: true });
         });
     } catch (err) {
         throw new Error(`Error while creating tmp folder: ${err.message}`);
@@ -94,39 +95,43 @@ async function getRecordings(course, moodleSession) {
  * If downloadPath doesn't exists, download the recording and save it.
  * @param {import('./helpers/webex').Recording} recording Recording to download
  * @param {config.ConfigDownload} downloadConfigs Download section configs
- * @param {string} downloadPath Final save-path after download its complete
- * @param {string} tmpDownloadPath Temporary save-path, used until the download its complete
+ * @param {string} downloadFilePath Final file save-path after download its complete
+ * @param {string} tmpDownloadFolderPath Temporary save-path folder, used until the download its complete
  * @param {MultiProgressBar} [multiProgressBar=null] MultiProgressBar instance to render download status
  */
-async function downloadRecordingIfNotExists(recording, downloadConfigs, downloadPath, tmpDownloadPath, multiProgressBar = null) {
-    if (!existsSync(downloadPath)) {
+async function downloadRecordingIfNotExists(recording, downloadConfigs, downloadFilePath, tmpDownloadFolderPath, multiProgressBar = null) {
+    if (!existsSync(downloadFilePath)) {
         logger.info(`   └─ Downloading: ${recording.name}`);
         const downloadName = getUTCDateTimestamp(recording.created_at, '');
 
         try {
+            await mkdirIfNotExists(tmpDownloadFolderPath);
+            let tmpDownloadFilePath = join(tmpDownloadFolderPath, 'recording.mp4');
+
             // Try to use webex download feature and if it fails, fallback to hls stream feature
             try {
                 logger.debug(`      └─ [${downloadName}] Trying download feature`);
                 const downloadUrl = await getWebexRecordingDownloadUrl(recording.file_url, recording.password);
-                await downloadStream(downloadUrl, tmpDownloadPath, downloadConfigs.progress_bar, multiProgressBar, downloadName);
+                await downloadStream(downloadUrl, tmpDownloadFilePath, downloadConfigs.progress_bar, multiProgressBar, downloadName);
             } catch (error) {
                 logger.warn(`      └─ [${downloadName}] ${error}`);
                 logger.info(`      └─ [${downloadName}] Trying downloading stream`);
                 const { playlistUrl, filesize } = await getWebexRecordingHSLPlaylist(recording.recording_url, recording.password);
-                await downloadHLSPlaylist(playlistUrl, tmpDownloadPath, filesize, downloadConfigs.progress_bar, multiProgressBar, downloadName);
+                await downloadHLSPlaylist(playlistUrl, tmpDownloadFolderPath, filesize, downloadConfigs.progress_bar, multiProgressBar, downloadName);
+                await mergeHLSPlaylistSegments(tmpDownloadFolderPath, tmpDownloadFilePath);
             }
 
             // Download was successful, move rec to destination
             // logger.debug(`[${downloadName}] Moving file out of tmp folder`);
             try {
-                renameSync(tmpDownloadPath, downloadPath);
+                renameSync(tmpDownloadFilePath, downloadFilePath);
             } catch (err) {
                 if (err.code === 'EXDEV') {
                     // Cannot move files that are not in the top OverlayFS layer (e.g.: inside volumes)
                     // logger.debug(`[${downloadName}] Probably inside a Docker container, falling back to copy-and-unlink`);
-                    const fileContents = readFileSync(tmpDownloadPath);
-                    writeFileSync(downloadPath, fileContents);
-                    unlinkSync(tmpDownloadPath);
+                    const fileContents = readFileSync(tmpDownloadFilePath);
+                    writeFileSync(downloadFilePath, fileContents);
+                    unlinkSync(tmpDownloadFilePath);
                 } else {
                     throw err;  // Bubble up
                 }
@@ -166,7 +171,8 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
             );
 
             let downloadPath = join(folderPath, filename);
-            let tmpDownloadPath = join('./tmp/', filename);
+            let filenameHash = createHash('sha1').update(filename).digest('hex');
+            let tmpDownloadPath = join('./tmp/', filenameHash);
             try {
                 await mkdirIfNotExists(folderPath);
             } catch (err) {

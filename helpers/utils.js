@@ -39,8 +39,40 @@ function isFilenameValidOnWindows(filename) {
     return !( /[<>:"/\\|?*\x00-\x1F\r\n]/.test(filename) || /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(filename) );
 }
 
+/**
+ * Retries a promise until it's resolved or it fails too many times
+ * @param {*} fn the function that is called each try
+ * @param {*} maxRetries the max number of retries before throwing an error if the functions keep failing
+ * @param {*} timeoutOnError Time to wait before trying again to call fn
+ * @returns
+ */
+function retryPromise(fn, maxRetries, timeoutOnError = 0) {
+    return fn().catch(async function (err) {
+        if (maxRetries <= 0) {
+            throw err;
+        }
+        await sleep(timeoutOnError);
+        return retryPromise(fn, maxRetries - 1, timeoutOnError);
+    });
+}
+
+/**
+ * Return a promise that resolves after 'timeout' ms
+ * @param {number} timeout Sleep timeout in ms
+ * @returns Promise that is resolved after 'timeout' ms
+ */
+function sleep(timeout) {
+    return new Promise(resolve => {
+        setTimeout(() => {
+            resolve();
+        }, timeout);
+    });
+}
+
 module.exports = {
     splitArrayInChunksOfFixedLength,
     isNone,
-    isFilenameValidOnWindows
+    isFilenameValidOnWindows,
+    sleep,
+    retryPromise
 };

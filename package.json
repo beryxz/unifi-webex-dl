@@ -1,6 +1,6 @@
 {
   "name": "unifi-webex-dl",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "description": "Download recorded lessons from unifi webex platform passing by the Moodle platform.",
   "main": "app.js",
   "scripts": {

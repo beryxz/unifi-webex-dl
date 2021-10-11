@@ -1,13 +1,15 @@
 const logger = require('./logging')('download');
-const { access, createWriteStream, mkdir, unlinkSync, unlink } = require('fs');
+const { sleep, retryPromise } = require('./utils');
+const { access, existsSync, createWriteStream, createReadStream, mkdir, unlinkSync, unlink } = require('fs');
 const axios = require('axios').default;
 const bytes = require('bytes');
 const url = require('url');
+const { join } = require('path');
 
 /**
  * @type {number}
  */
-const RETRY_COUNT = 5;
+const RETRY_COUNT = 10;
 
 /**
  * @type {bytes.BytesOptions}
@@ -107,7 +109,7 @@ async function parsePlaylistSegments(playlistUrl) {
 /**
  *
  * @param {string} playlistUrl The HLS m3u8 playlist file url
- * @param {string} savePath Existing path to which to save the stream
+ * @param {string} savePath Existing path to folder where to save the stream segments
  * @param {int} filesize The size of the stream (used for visual feedback only)
  * @param {boolean} progressBar Whether to show a progress bar of the download
  * @param {import('./MultiProgressBar.js')} [multiProgressBar=null] MultiProgress instance for creating multiple progress bars
@@ -116,77 +118,60 @@ async function parsePlaylistSegments(playlistUrl) {
 async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgressBar = true, multiProgressBar = null, downloadName = '') {
     let progressBar, fileStream;
 
-    if (multiProgressBar && showProgressBar) {
-        const filesizePretty = bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9);
-        progressBar = multiProgressBar.newBar(`[${downloadName}] ${filesizePretty} > [:bar] :percent :etas`, {
-            width: 20,
-            complete: '=',
-            incomplete: ' ',
-            renderThrottle: 100,
-            clear: true,
-            total: 100
-        });
-    }
-
     // Download the hls stream
     try {
         const segments = await parsePlaylistSegments(playlistUrl);
         const totSegments = segments.length;
+        const segmentsStatus = [];
 
-        // stream where to save recording
-        fileStream = createWriteStream(savePath);
-
-        // progress is called after the segment finished downloading
-        fileStream.on('progress', ({segment, totSegments}) => {
-            progressBar?.update(segment/totSegments);
-        });
+        if (multiProgressBar && showProgressBar) {
+            const filesizePretty = bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9);
+            progressBar = multiProgressBar.newBar(`[${downloadName}] ${filesizePretty} > [:bar] :percent :etas`, {
+                width: 20,
+                complete: '=',
+                incomplete: ' ',
+                renderThrottle: 100,
+                clear: true,
+                total: totSegments
+            });
+        }
 
         // download each segment
         let segmentNum = 1;
         for (const segmentUrl of segments) {
-            let success = false;
-            let retryCount = 0;
-            do {
-                try {
-                    // download segment
-                    const { data } = await axios.get(url.resolve(playlistUrl, segmentUrl), {
-                        responseType: 'stream',
-                        headers: {
-                            'User-Agent': 'Mozilla/5.0'
-                        }
-                    });
+            const TMP_NUM = segmentNum;
+
+            // download segment
+            retryPromise(() => {
+                return axios.get(url.resolve(playlistUrl, segmentUrl), {
+                    responseType: 'stream',
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0'
+                    }
+                }).then(res => {
+                    fileStream = createWriteStream(join(savePath, `${TMP_NUM}.ts`));
 
                     // wait for segment to download
-                    data.pipe(fileStream, { end: false });
-                    await new Promise((resolve) => {
-                        data.on('end', () => {
+                    res.data.pipe(fileStream);
+                    segmentsStatus.push(new Promise((resolve) => {
+                        res.data.on('end', () => {
+                            progressBar.tick();
                             resolve();
                         });
-                    });
+                    }));
+                });
+            }, RETRY_COUNT, 500)
+                .catch(() => {
+                    throw new Error(`[${downloadName}] Segment ${segmentNum} failed downloading`);
+                });
 
-                    // emit status update
-                    fileStream.emit('progress', {
-                        segment: segmentNum + 1,
-                        totSegments: totSegments
-                    });
-
-                    segmentNum++;
-                    success = true;
-                } catch (error) {
-                    // tries up to 'RETRY_COUNT' times
-                    if (retryCount < RETRY_COUNT) {
-                        retryCount++;
-                        logger.debug(`[${downloadName}] Segment ${segmentNum} failed, retrying...`);
-                        await new Promise(r => setTimeout(r, 1000));
-                    } else {
-                        throw new Error(`[${downloadName}] Segment ${segmentNum} failed downloading`);
-                    }
-                }
-            } while (!success);
+            segmentNum++;
         }
 
-        // close stream
-        fileStream.end();
+        while (segmentsStatus.length < totSegments) {
+            await sleep(100);
+        }
+        await Promise.all(segmentsStatus);
     } catch (err) {
         progressBar?.terminate();
         logger.error(`Error while downloading [${downloadName}]: ${err.message}`);
@@ -196,8 +181,41 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
     }
 }
 
+/**
+ *
+ * @param {string} segmentsPath Path to the folder containing the downloaded hls segments
+ * @param {string} resultFilePath Path where to save the merged file
+ */
+async function mergeHLSPlaylistSegments(segmentsPath, resultFilePath) {
+    const outputFile = createWriteStream(resultFilePath);
+
+    let segmentNum = 1;
+    while (true) {
+        let segmentPath = join(segmentsPath, `${segmentNum}.ts`);
+        if (!existsSync(segmentPath)) break;
+
+        const segment = createReadStream(segmentPath);
+
+        segment.pipe(outputFile, { end: false });
+        await new Promise((resolve) => {
+            segment.on('end', () => {
+                resolve();
+            });
+        });
+
+        try {
+            unlinkSync(segmentPath);
+        } catch (err) {
+            logger.debug(`Error deleting tmp segment: ${err.message}`);
+        }
+
+        segmentNum++;
+    }
+}
+
 module.exports = {
     downloadStream,
     mkdirIfNotExists,
-    downloadHLSPlaylist
+    downloadHLSPlaylist,
+    mergeHLSPlaylistSegments
 };
