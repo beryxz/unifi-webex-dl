@@ -2,17 +2,29 @@
 
 > Download recorded lessons from UniFi's Webex platform passing by the Moodle platform.
 
-## Requirements
-
-- Node.js v14 or newer
+This utility can automatically download all UniFi courses' recordings saved on webex.
 
 ## Quick Start
 
-Install project dependencies: `npm ci`
+The easiest way to start is by downloading the pre-compiled application from the latest release available.
 
-Copy `config.example.json` to a new file named `config.json` and change credentials and courses ids accordingly.
+Then, copy the `config.example.json` file to a new file named `config.json` and change the credentials and courses ids accordingly.
 
-Run the app with: `npm start`
+Done, that's it!
+
+While being the easiest method, it does come with a drawback. To update it, you'll have to manually check the repository once in a while and download the latest version. For this reason, if possible, it is recommended to use the following method that uses Node directly.
+
+## [Optional] Quick Start with Node
+
+Node.js v14 or newer is required.
+
+- Install project dependencies: `npm ci`
+
+- Copy `config.example.json` to a new file named `config.json` and change credentials and courses ids accordingly.
+
+- Run the app with: `npm start`
+
+When you pull new updates, remember to update project dependencies using `npm ci`.
 
 ## [Optional] Quick Start with Docker
 
@@ -24,8 +36,6 @@ Note a few things:
 - If you use `.yaml` configs instead of `.json`, change the extension accordingly in `docker.sh`
 
 ## PLEASE NOTE
-
-When you pull new updates, remember to update project dependencies using `npm ci`.
 
 If a recording gives you an error, verify on Webex that it can actually be opened before opening an issue. Recordings could be disabled by the course organizer.
 
