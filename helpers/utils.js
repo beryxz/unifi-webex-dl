@@ -41,18 +41,18 @@ function isFilenameValidOnWindows(filename) {
 
 /**
  * Retries a promise until it's resolved or it fails too many times
- * @param {*} fn the function that is called each try
  * @param {*} maxRetries the max number of retries before throwing an error if the functions keep failing
  * @param {*} timeoutOnError Time to wait before trying again to call fn
+ * @param {*} fn the function that is called each try
  * @returns
  */
-function retryPromise(fn, maxRetries, timeoutOnError = 0) {
+function retryPromise(maxRetries, timeoutOnError, fn) {
     return fn().catch(async function (err) {
         if (maxRetries <= 0) {
             throw err;
         }
         await sleep(timeoutOnError);
-        return retryPromise(fn, maxRetries - 1, timeoutOnError);
+        return retryPromise(maxRetries - 1, timeoutOnError, fn);
     });
 }
 

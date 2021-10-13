@@ -155,7 +155,7 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
             const TMP_NUM = segmentNum;
 
             // download segment
-            retryPromise(() => {
+            retryPromise(RETRY_COUNT, RETRY_DELAY, () => {
                 return axios.get(url.resolve(playlistUrl, segmentUrl), {
                     responseType: 'stream',
                     headers: {
@@ -171,7 +171,7 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
                         segmentsLeft--;
                     });
                 });
-            }, RETRY_COUNT, RETRY_DELAY)
+            })
                 .catch(() => {
                     throw new Error(`[${downloadName}] Segment ${segmentNum} failed downloading`);
                 });

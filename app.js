@@ -196,23 +196,18 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
 async function processCourses(configs, moodleSession) {
     logger.info('Fetching recordings lists');
 
-    await Promise.all(
-        configs.courses.map(course =>
-            retryPromise(() =>
-                getRecordings(course, moodleSession)
-                    .then(recordings => {
-                        logger.info(`Working on course: ${course.id} - ${course.name ?? ''}`);
-                        logger.info(`└─ Found ${recordings.totalCount} recordings (${recordings.filteredCount} filtered)`);
+    for (const course of configs.courses) {
+        await retryPromise(3, 500, () => getRecordings(course, moodleSession))
+            .then(recordings => {
+                logger.info(`Working on course: ${course.id} - ${course.name ?? ''}`);
+                logger.info(`└─ Found ${recordings.totalCount} recordings (${recordings.filteredCount} filtered)`);
 
-                        return processCourseRecordings(course, recordings.recordings, configs.download);
-                    })
-                    .catch(err => { throw err; })
-            , 3, 500)
-                .catch(err => {
-                    logger.warn(`[${course.id}] Skipping because of: ${err.message}`);
-                })
-        )
-    );
+                return processCourseRecordings(course, recordings.recordings, configs.download);
+            })
+            .catch(err => {
+                logger.warn(`[${course.id}] Skipping because of: ${err.message}`);
+            });
+    }
 
     //TODO DISABLED since on windows the name cannot contain some special chars.
     //     Applying a sanitization step might solve this.
