@@ -30,63 +30,72 @@ const { getCookies } = require('./cookie');
  */
 
 /**
+ * Time in milliseconds before timing out webex requests
+ * @type {number}
+ */
+const WEBEX_REQUEST_TIMEOUT = 5000;
+
+/**
  * Launch the webex platform and retrieve the JWT and Cookies
  * @param {import('./moodle').WebexLaunchOptions} webexLaunchOptions
- * @returns {WebexLaunchObject}
+ * @returns {Promise<WebexLaunchObject>}
  */
 async function launchWebex(webexLaunchOptions) {
-    try {
-        logger.debug(`[${webexLaunchOptions.webexCourseId}] Launching Webex`);
-        const res = await axios.post('https://lti.educonnector.io/launches', webexLaunchOptions.launchParameters, {
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'Mozilla/5.0'
-            }
-        });
+    logger.debug(`[${webexLaunchOptions.webexCourseId}] Launching Webex`);
 
-        // Get only the first part of the cookie without the optional part
-        const cookies = getCookies(res.headers['set-cookie']);
+    let reqConfig = {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'Mozilla/5.0'
+        },
+        timeout: WEBEX_REQUEST_TIMEOUT
+    };
+    return axios.post('https://lti.educonnector.io/launches', webexLaunchOptions.launchParameters, reqConfig)
+        .then(res => {
+            return {
+                webexCourseId: webexLaunchOptions.webexCourseId,
+                launchParameters: webexLaunchOptions.launchParameters,
+                cookies: getCookies(res.headers['set-cookie'])
+            };
+        })
+        .catch(err => { throw new Error(`Couldn't launch webex. ${err.message}`); });
 
-        //NOTE: API changed, shouldn't be necessary anymore. Anyway, "json_web_token" changed to "session_ticket"
-        // match JWT
-        // let jwt = res.data.match(/(?:"|&quot;)json_web_token(?:"|&quot;):(?:"|&quot;)([a-zA-Z0-9.\-_=+/]+?)(?:"|&quot;)/);
-        // if (jwt === null)
-        //     throw new Error('JWT not found');
-        // jwt = jwt[1];
-        // logger.debug(`├─ jwt: ${jwt}`);
-        // logger.debug(`└─ cookies: ${cookies}`);
-
-        return {
-            webexCourseId: webexLaunchOptions.webexCourseId,
-            launchParameters: webexLaunchOptions.launchParameters,
-            cookies: cookies
-        };
-    } catch (err) {
-        throw new Error(`Couldn't launch webex. ${err.message}`);
-    }
+    //NOTE: API changed, shouldn't be necessary anymore. Anyway, "json_web_token" changed to "session_ticket"
+    // match JWT
+    // let jwt = res.data.match(/(?:"|&quot;)json_web_token(?:"|&quot;):(?:"|&quot;)([a-zA-Z0-9.\-_=+/]+?)(?:"|&quot;)/);
+    // if (jwt === null)
+    //     throw new Error('JWT not found');
+    // jwt = jwt[1];
+    // logger.debug(`├─ jwt: ${jwt}`);
+    // logger.debug(`└─ cookies: ${cookies}`);
 }
 
 /**
  * Get all available recordings for the given webex course
  * @param {WebexLaunchObject} webexObject Required to interact with webex endpoints
- * @returns {Recording[]} List of all the available recordings
+ * @returns {Promise<Recording[]>} List of all the available recordings
  */
 async function getWebexRecordings(webexObject) {
     logger.debug(`[${webexObject.webexCourseId}] Get recordings`);
-    const res = await axios.get('https://lti.educonnector.io/api/webex/recordings', {
+
+    let requestConfig = {
         headers: {
             'Cookie': webexObject.cookies,
             'User-Agent': 'Mozilla/5.0'
-        }
-    });
-
-    return res.data;
+        },
+        timeout: WEBEX_REQUEST_TIMEOUT
+    };
+    return axios.get('https://lti.educonnector.io/api/webex/recordings', requestConfig)
+        .then(res => res.data)
+        .catch(err => {
+            throw new Error(`Error retrieving recordings: ${err.message}`);
+        });
 }
 
 /**
  * Get the nbrshared response for the events
  * @param {AxiosResponse} res The response from fileUrl
- * @param {string} password The recording password
+ * @param {Promise<string>} password The recording password
  */
 async function eventRecordingPassword(res, password) {
     let url, params;

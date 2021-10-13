@@ -69,7 +69,7 @@ async function loginMoodle(username, password) {
  * Login into Moodle platform through the "Autenticazione Unica UniFi" portal.
  * @param {string} username Moodle username
  * @param {string} password Moodle password
- * @returns {string} Moodle session token cookie
+ * @returns {Promise<string>} Moodle session token cookie
  */
 async function loginMoodleUnifiedAuth(username, password) {
     let res, executionToken, cookie;
@@ -195,8 +195,7 @@ async function getWebexLaunchOptions(sessionToken, courseId, customWebexId=null)
         let webexId;
         if (customWebexId == null || customWebexId == undefined) {
             webexId = await getWebexId(sessionToken, courseId);
-            if (webexId === null)
-                return { launchParameters: null, webexCourseId: null };
+            if (webexId === null) throw new Error('Webex id not found');
         } else {
             webexId = customWebexId;
         }
@@ -223,7 +222,7 @@ async function getWebexLaunchOptions(sessionToken, courseId, customWebexId=null)
             webexCourseId: webexId
         };
     } catch (err) {
-        throw new Error(`Error while loading launch options for webex. ${err.message}`);
+        throw new Error(`Error while loading launch options for webex: ${err.message}`);
     }
 }
 

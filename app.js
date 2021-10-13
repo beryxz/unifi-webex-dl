@@ -8,10 +8,12 @@ const { existsSync, renameSync, readdirSync, readFileSync, unlinkSync, writeFile
 const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists, mergeHLSPlaylistSegments } = require('./helpers/download');
 const { getUTCDateTimestamp } = require('./helpers/date');
 const MultiProgressBar = require('./helpers/MultiProgressBar');
-const { splitArrayInChunksOfFixedLength } = require('./helpers/utils');
+const { splitArrayInChunksOfFixedLength, retryPromise } = require('./helpers/utils');
 
 /**
- * @return {config.Config} configs
+ * Load the proper config file.
+ * First it tries to load config.json, if it doesn't exist, config.yaml is tried next
+ * @return {Promise<config.Config>} configs
  */
 async function loadConfig() {
     let configPath = process.env['CONFIG_PATH'];
@@ -27,16 +29,17 @@ async function loadConfig() {
         logger.info(`Loading ${configPath}`);
     }
 
-    return await config.load(configPath);
+    return config.load(configPath);
 }
 
 /**
+ * Creates the temp folder removing all temp files of previous executions that were abruptly interrupted
+ * @returns {Promise<void>}
  * @throws {Error} If temp directory couldn't be created
  */
 async function createTempFolder() {
     try {
         await mkdirIfNotExists('./tmp');
-        // remove temp files of previous executions that were abruptly interrupted
         readdirSync('./tmp').forEach(tmpfile => {
             rmSync(join('./tmp/', tmpfile), { recursive: true, force: true });
         });
@@ -47,48 +50,44 @@ async function createTempFolder() {
 
 /**
  * @param {config.Config} configs
- * @returns {string} Moodle session token cookie
+ * @returns {Promise<string>} Moodle session token cookie
  */
 async function loginToMoodle(configs) {
     logger.info('Logging into Moodle');
-    return await loginMoodleUnifiedAuth(configs.credentials.username, configs.credentials.password);
+    return loginMoodleUnifiedAuth(configs.credentials.username, configs.credentials.password);
 }
 
 /**
  * Get all recordings, applying filters specified in the course's config
  * @param {config.Course} course
  * @param {string} moodleSession
- * @return {object}
+ * @return {Promise<object>}
  */
 async function getRecordings(course, moodleSession) {
-    // Launch webex
-    const webexLaunch = await getWebexLaunchOptions(moodleSession, course.id, course?.custom_webex_id);
-    if (webexLaunch.webexCourseId === null) {
-        logger.warn('└─ Webex id not found... Skipping');
-    }
-    const webexObject = await launchWebex(webexLaunch);
+    return await getWebexLaunchOptions(moodleSession, course.id, course?.custom_webex_id)
+        .then(webexLaunch => launchWebex(webexLaunch))
+        .then(webexObject => getWebexRecordings(webexObject))
+        .then(recordingsAll => {
+            const recordings = recordingsAll.filter(rec => {
+                try {
+                    let createdAt = new Date(rec.created_at).getTime();
+                    return !(
+                        (course.skip_before_date && new Date(course.skip_before_date) > createdAt) ||
+                        (course.skip_after_date && new Date(course.skip_after_date) < createdAt) ||
+                        (course.skip_names && RegExp(course.skip_names).test(rec.name))
+                    );
+                } catch (err) {
+                    return true;
+                }
+            });
 
-    // Get recordings
-    const recordingsAll = await getWebexRecordings(webexObject);
-    // Filter recordings
-    const recordings = recordingsAll.filter(rec => {
-        try {
-            let createdAt = new Date(rec.created_at).getTime();
-            return !(
-                (course.skip_before_date && new Date(course.skip_before_date) > createdAt) ||
-                (course.skip_after_date && new Date(course.skip_after_date) < createdAt) ||
-                (course.skip_names && RegExp(course.skip_names).test(rec.name))
-            );
-        } catch (err) {
-            return true;
-        }
-    });
-
-    return {
-        recordings: recordings,
-        totalCount: recordingsAll.length,
-        filteredCount: recordingsAll.length - recordings.length
-    };
+            return {
+                recordings: recordings,
+                totalCount: recordingsAll.length,
+                filteredCount: recordingsAll.length - recordings.length
+            };
+        })
+        .catch(err => { throw err; });
 }
 
 /**
@@ -156,9 +155,8 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
 
     for (const chunk of chunks) {
         const multiProgressBar = new MultiProgressBar();
-        let downloads = [];
 
-        for (const recording of chunk) {
+        let downloads = chunk.map(recording => {
             // filename
             let filename = `${recording.name}.${recording.format}`.replace(/[\\/:"*?<>| \r\n]/g, '_');
             if (course.prepend_date)
@@ -173,14 +171,14 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
             let downloadPath = join(folderPath, filename);
             let filenameHash = createHash('sha1').update(filename).digest('hex');
             let tmpDownloadPath = join('./tmp/', filenameHash);
-            try {
-                await mkdirIfNotExists(folderPath);
-            } catch (err) {
-                throw new Error(`Error while creating folder structure: ${err.message}`);
-            }
 
-            downloads.push(downloadRecordingIfNotExists(recording, downloadConfigs, downloadPath, tmpDownloadPath, (downloadConfigs.progress_bar ? multiProgressBar : null)));
-        }
+            return mkdirIfNotExists(folderPath)
+                .then(() =>
+                    downloadRecordingIfNotExists(recording, downloadConfigs, downloadPath, tmpDownloadPath, (downloadConfigs.progress_bar ? multiProgressBar : null)))
+                .catch(err => {
+                    throw err;
+                });
+        });
 
         await Promise.all(downloads);
     }
@@ -193,34 +191,37 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
  * Then, each recordings list is processed individually.
  * @param {config.Config} configs
  * @param {string} moodleSession
+ * @returns {Promise<void>}
  */
 async function processCourses(configs, moodleSession) {
-    let coursesToProcess = [];
-
     logger.info('Fetching recordings lists');
-    for (const course of configs.courses) {
-        //TODO DISABLED since on windows the name cannot contain some special chars.
-        //     Applying a sanitization step might solve this.
-        //
-        // // Get course name if unspecified
-        // if (!course.name) {
-        //     course.name = await getCourseName(moodleSession, course.id);
-        //     logger.info(`[${course.id}] Fetched course name: ${course.name}`);
-        // }
 
-        coursesToProcess.push({
-            recordings: getRecordings(course, moodleSession),
-            course: course
-        });
-    }
+    await Promise.all(
+        configs.courses.map(course =>
+            retryPromise(() =>
+                getRecordings(course, moodleSession)
+                    .then(recordings => {
+                        logger.info(`Working on course: ${course.id} - ${course.name ?? ''}`);
+                        logger.info(`└─ Found ${recordings.totalCount} recordings (${recordings.filteredCount} filtered)`);
 
-    for (const c of coursesToProcess) {
-        const recordings = await c.recordings;
-        logger.info(`Working on course: ${c.course.id} - ${c.course.name ?? ''}`);
-        logger.info(`└─ Found ${recordings.totalCount} recordings (${recordings.filteredCount} filtered)`);
+                        return processCourseRecordings(course, recordings.recordings, configs.download);
+                    })
+                    .catch(err => { throw err; })
+            , 3, 500)
+                .catch(err => {
+                    logger.warn(`[${course.id}] Skipping because of: ${err.message}`);
+                })
+        )
+    );
 
-        await processCourseRecordings(c.course, recordings.recordings, configs.download);
-    }
+    //TODO DISABLED since on windows the name cannot contain some special chars.
+    //     Applying a sanitization step might solve this.
+    //
+    // // Get course name if unspecified
+    // if (!course.name) {
+    //     course.name = await getCourseName(moodleSession, course.id);
+    //     logger.info(`[${course.id}] Fetched course name: ${course.name}`);
+    // }
 }
 
 (async () => {
