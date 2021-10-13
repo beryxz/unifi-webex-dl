@@ -3,8 +3,10 @@
   "version": "7.0.0",
   "description": "Download recorded lessons from unifi webex platform passing by the Moodle platform.",
   "main": "app.js",
+  "bin": "app.js",
   "scripts": {
-    "start": "node app.js"
+    "start": "node app.js",
+    "compile": "pkg --no-build ."
   },
   "repository": {
     "type": "git",
@@ -27,5 +29,13 @@
   },
   "devDependencies": {
     "eslint": "^7.19.0"
+  },
+  "pkg": {
+    "targets": [
+      "node16-linux-x64",
+      "node16-win-x64",
+      "node16-macos-x64"
+    ],
+    "outputPath": "dist"
   }
 }
