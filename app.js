@@ -118,11 +118,12 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
                 logger.warn(`      └─ [${downloadName}] ${error}`);
                 logger.info(`      └─ [${downloadName}] Trying downloading stream`);
                 const { playlistUrl, filesize } = await retryPromise(5, 1000, () => getWebexRecordingHSLPlaylist(recording.recording_url, recording.password));
-                await downloadHLSPlaylist(playlistUrl, tmpDownloadFolderPath, filesize, downloadConfigs.progress_bar, multiProgressBar, downloadName);
-                await mergeHLSPlaylistSegments(tmpDownloadFolderPath, tmpDownloadFilePath);
+                const downloadedSegments = await downloadHLSPlaylist(playlistUrl, tmpDownloadFolderPath, filesize, downloadConfigs.progress_bar, multiProgressBar, downloadName);
+                await mergeHLSPlaylistSegments(tmpDownloadFolderPath, tmpDownloadFilePath, downloadedSegments, downloadConfigs.progress_bar, multiProgressBar, downloadName);
             }
 
-            // Download was successful, move rec to destination
+            // COMMENTED OUT as it broke the progress bars
+            // Download was successful, move rec to destination.
             // logger.debug(`[${downloadName}] Moving file out of tmp folder`);
             try {
                 renameSync(tmpDownloadFilePath, downloadFilePath);

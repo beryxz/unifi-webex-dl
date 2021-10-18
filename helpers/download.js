@@ -124,12 +124,14 @@ async function parsePlaylistSegments(playlistUrl) {
  * @param {string} playlistUrl The HLS m3u8 playlist file url
  * @param {string} savePath Existing path to folder where to save the stream segments
  * @param {int} filesize The size of the stream (used for visual feedback only)
- * @param {boolean} progressBar Whether to show a progress bar of the download
+ * @param {boolean} [showProgressBar=true] Whether to show a progress bar of the download
  * @param {import('./MultiProgressBar.js')} [multiProgressBar=null] MultiProgress instance for creating multiple progress bars
- * @param {string} downloadName Name to show before the progress bar
+ * @param {string} [downloadName=''] Name to show before the progress bar
+ * @returns {number} Number of downloaded segments.
  */
 async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgressBar = true, multiProgressBar = null, downloadName = '') {
-    let progressBar, fileStream;
+    let progressBar;
+    let fileStream;
 
     // Download the hls stream
     try {
@@ -186,6 +188,8 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
         while (segmentsLeft > 0) {
             await sleep(1000);
         }
+
+        return totSegments;
     } catch (err) {
         progressBar?.terminate();
         logger.error(`Error while downloading [${downloadName}]: ${err.message}`);
@@ -196,15 +200,30 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
 }
 
 /**
- *
+ * Merge the segments downloaded with downloadHLSPlaylist()
  * @param {string} segmentsPath Path to the folder containing the downloaded hls segments
  * @param {string} resultFilePath Path where to save the merged file
+ * @param {number} [downloadedSegments=null] Number of segments to merge. If not set, are merged all incremental segments starting from 1 and until one is missing.
+ * @param {boolean} [showProgressBar=true] Whether to show a progress bar of the download
+ * @param {import('./MultiProgressBar.js')} [multiProgressBar=null] MultiProgress instance for creating multiple progress bars
+ * @param {string} [downloadName=''] Name to show before the progress bar
  */
-async function mergeHLSPlaylistSegments(segmentsPath, resultFilePath) {
+async function mergeHLSPlaylistSegments(segmentsPath, resultFilePath, downloadedSegments = null, showProgressBar = true, multiProgressBar = null, downloadName = '') {
     const outputFile = createWriteStream(resultFilePath);
+    let progressBar;
 
-    let segmentNum = 1;
-    while (true) {
+    if (multiProgressBar && showProgressBar && downloadedSegments) {
+        progressBar = multiProgressBar.newBar(`[${downloadName}] MERGE > [:bar] :percent :etas`, {
+            width: 20,
+            complete: '=',
+            incomplete: ' ',
+            renderThrottle: 100,
+            clear: true,
+            total: downloadedSegments
+        });
+    }
+
+    for (let segmentNum = 1; (downloadedSegments ? (segmentNum <= downloadedSegments) : true); segmentNum++) {
         let segmentPath = join(segmentsPath, `${segmentNum}.ts`);
         if (!existsSync(segmentPath)) break;
 
@@ -213,6 +232,7 @@ async function mergeHLSPlaylistSegments(segmentsPath, resultFilePath) {
         segment.pipe(outputFile, { end: false });
         await new Promise((resolve) => {
             segment.on('end', () => {
+                progressBar.tick();
                 resolve();
             });
         });
@@ -222,8 +242,6 @@ async function mergeHLSPlaylistSegments(segmentsPath, resultFilePath) {
         } catch (err) {
             logger.debug(`Error deleting tmp segment: ${err.message}`);
         }
-
-        segmentNum++;
     }
 }
 
