@@ -8,7 +8,7 @@ const { existsSync, renameSync, readdirSync, readFileSync, unlinkSync, writeFile
 const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists, mergeHLSPlaylistSegments } = require('./helpers/download');
 const { getUTCDateTimestamp } = require('./helpers/date');
 const MultiProgressBar = require('./helpers/MultiProgressBar');
-const { splitArrayInChunksOfFixedLength, retryPromise } = require('./helpers/utils');
+const { splitArrayInChunksOfFixedLength, retryPromise, sleep } = require('./helpers/utils');
 
 /**
  * Load the proper config file.
@@ -24,6 +24,8 @@ async function loadConfig() {
         } else if (existsSync('./config.yaml')) {
             logger.info('Loading config.yaml');
             configPath = './config.yaml';
+        } else {
+            throw new Error('Config file not found. Are you in the same directory as the script?');
         }
     } else {
         logger.info(`Loading ${configPath}`);
@@ -115,7 +117,7 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
             } catch (error) {
                 logger.warn(`      └─ [${downloadName}] ${error}`);
                 logger.info(`      └─ [${downloadName}] Trying downloading stream`);
-                const { playlistUrl, filesize } = await getWebexRecordingHSLPlaylist(recording.recording_url, recording.password);
+                const { playlistUrl, filesize } = await retryPromise(5, 1000, () => getWebexRecordingHSLPlaylist(recording.recording_url, recording.password));
                 await downloadHLSPlaylist(playlistUrl, tmpDownloadFolderPath, filesize, downloadConfigs.progress_bar, multiProgressBar, downloadName);
                 await mergeHLSPlaylistSegments(tmpDownloadFolderPath, tmpDownloadFilePath);
             }
@@ -196,16 +198,30 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
 async function processCourses(configs, moodleSession) {
     logger.info('Fetching recordings lists');
 
+    let coursesToProcess = [];
     for (const course of configs.courses) {
-        await retryPromise(3, 500, () => getRecordings(course, moodleSession))
-            .then(recordings => {
+        let coursePromise = retryPromise(3, 500, () => getRecordings(course, moodleSession))
+            .then(recordings => ({
+                recordings: recordings,
+                course: course
+            }))
+            .catch(err => {
+                logger.warn(`[${course.id}] Skipping because of: ${err.message}`);
+            });
+
+        coursesToProcess.push(coursePromise);
+    }
+
+    for (const curCourse of coursesToProcess) {
+        await curCourse
+            .then(({ recordings, course }) => {
                 logger.info(`Working on course: ${course.id} - ${course.name ?? ''}`);
                 logger.info(`└─ Found ${recordings.totalCount} recordings (${recordings.filteredCount} filtered)`);
 
                 return processCourseRecordings(course, recordings.recordings, configs.download);
             })
             .catch(err => {
-                logger.warn(`[${course.id}] Skipping because of: ${err.message}`);
+                throw err;
             });
     }
 
@@ -233,5 +249,7 @@ async function processCourses(configs, moodleSession) {
         logger.info('Done');
     } catch (err) {
         logger.error(err);
+        logger.warn('Exiting in 5s...');
+        await sleep(5000);
     }
 })();
