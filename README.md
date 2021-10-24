@@ -63,6 +63,8 @@ The default config file path is `config.json` inside the root directory; you can
 - `show_existing`: (Optional) boolean to set whether or not to show already downloaded recordings. Defaults to `true`
 - `max_concurrent_downloads`: (Optional) maximum number of parallel downloads. Defaults to `3`
 
+TODO `fix_streams_with_ffmpeg` remux with ffmpeg config and requirements
+
 ### Courses
 
 > Array of objects, one for each course. The object contains the following fields.

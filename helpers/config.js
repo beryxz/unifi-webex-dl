@@ -22,6 +22,7 @@ const yaml = require('yaml');
  * @property {boolean} progress_bar
  * @property {boolean} show_existing
  * @property {number} max_concurrent_downloads
+ * @property {boolean} fix_streams_with_ffmpeg
  */
 
 /**
@@ -121,6 +122,7 @@ async function load(configPath) {
         progress_bar = ((process.env['DOWNLOAD__PROGRESS_BAR']) || config.download?.progress_bar) ?? true,
         show_existing = ((process.env['DOWNLOAD__SHOW_EXISTING']) || config.download?.show_existing) ?? true,
         max_concurrent_downloads = ((process.env['DOWNLOAD__MAX_CONCURRENT_DOWNLOADS']) || config.download?.max_concurrent_downloads) ?? 3,
+        fix_streams_with_ffmpeg = ((process.env['DOWNLOAD__FIX_STREAMS_WITH_FFMPEG']) || config.download?.fix_streams_with_ffmpeg) ?? false,
         courses;
 
     // Work on course objects
@@ -137,6 +139,7 @@ async function load(configPath) {
     // check for all required configs
     checkConfigs({username, password, base_path});
     checkCourses(courses);
+    //TODO if ffmpeg autofix is enable, check that ffmpeg is available as a command in the system path. Additionally, check that the h264/MPEG-4 formats are supported for muxing/demuxing using "ffmpeg -formats"
 
     return {
         credentials: {
@@ -147,7 +150,8 @@ async function load(configPath) {
             base_path,
             progress_bar: !!progress_bar,
             show_existing: !!show_existing,
-            max_concurrent_downloads
+            max_concurrent_downloads,
+            fix_streams_with_ffmpeg: !!fix_streams_with_ffmpeg
         },
         courses
     };

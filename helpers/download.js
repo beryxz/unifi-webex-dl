@@ -5,6 +5,8 @@ const axios = require('axios').default;
 const bytes = require('bytes');
 const url = require('url');
 const { join } = require('path');
+const util = require('util');
+const exec = util.promisify(require('child_process').exec);
 
 /**
  * Max retries for each segment
@@ -245,9 +247,30 @@ async function mergeHLSPlaylistSegments(segmentsPath, resultFilePath, downloaded
     }
 }
 
+// TODO docs
+// demux and remux a video file, using ffmpeg, to fix container format and metadata issues.
+async function remuxVideoWithFFmpeg(inputFilePath, outputFilePath) {
+    //TODO arguments should be further sanitized
+    return exec(`ffmpeg -v warning -y -i "${inputFilePath}" -c copy "${outputFilePath}"`)
+        .then(({ stdout, stderr }) => {
+            //TODO if stdout is not empty, an error or warning occurred. Example of when this happens?
+            if (stdout || stderr) {
+                logger.debug(stdout);
+                logger.debug(stderr);
+                throw new Error('FFmpeg failed the remux process');
+            }
+
+            return true;
+        })
+        .catch(err => {
+            throw err;
+        });
+}
+
 module.exports = {
     downloadStream,
     mkdirIfNotExists,
     downloadHLSPlaylist,
-    mergeHLSPlaylistSegments
+    mergeHLSPlaylistSegments,
+    remuxVideoWithFFmpeg
 };

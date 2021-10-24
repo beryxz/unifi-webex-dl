@@ -5,7 +5,7 @@ const { launchWebex, getWebexRecordings, getWebexRecordingDownloadUrl, getWebexR
 const logger = require('./helpers/logging')('app');
 const { join } = require('path');
 const { existsSync, renameSync, readdirSync, readFileSync, unlinkSync, writeFileSync, rmSync } = require('fs');
-const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists, mergeHLSPlaylistSegments } = require('./helpers/download');
+const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists, mergeHLSPlaylistSegments, remuxVideoWithFFmpeg } = require('./helpers/download');
 const { getUTCDateTimestamp } = require('./helpers/date');
 const MultiProgressBar = require('./helpers/MultiProgressBar');
 const { splitArrayInChunksOfFixedLength, retryPromise, sleep } = require('./helpers/utils');
@@ -108,6 +108,7 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
         try {
             await mkdirIfNotExists(tmpDownloadFolderPath);
             let tmpDownloadFilePath = join(tmpDownloadFolderPath, 'recording.mp4');
+            let fileIsStream = false;
 
             // Try to use webex download feature and if it fails, fallback to hls stream feature
             try {
@@ -115,6 +116,7 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
                 const downloadUrl = await getWebexRecordingDownloadUrl(recording.file_url, recording.password);
                 await downloadStream(downloadUrl, tmpDownloadFilePath, downloadConfigs.progress_bar, multiProgressBar, downloadName);
             } catch (error) {
+                fileIsStream = true;
                 logger.warn(`      └─ [${downloadName}] ${error}`);
                 logger.info(`      └─ [${downloadName}] Trying downloading stream`);
                 const { playlistUrl, filesize } = await retryPromise(5, 1000, () => getWebexRecordingHSLPlaylist(recording.recording_url, recording.password));
@@ -122,20 +124,27 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
                 await mergeHLSPlaylistSegments(tmpDownloadFolderPath, tmpDownloadFilePath, downloadedSegments, downloadConfigs.progress_bar, multiProgressBar, downloadName);
             }
 
-            // COMMENTED OUT as it broke the progress bars
-            // Download was successful, move rec to destination.
-            // logger.debug(`[${downloadName}] Moving file out of tmp folder`);
-            try {
-                renameSync(tmpDownloadFilePath, downloadFilePath);
-            } catch (err) {
-                if (err.code === 'EXDEV') {
-                    // Cannot move files that are not in the top OverlayFS layer (e.g.: inside volumes)
-                    // logger.debug(`[${downloadName}] Probably inside a Docker container, falling back to copy-and-unlink`);
-                    const fileContents = readFileSync(tmpDownloadFilePath);
-                    writeFileSync(downloadFilePath, fileContents);
-                    unlinkSync(tmpDownloadFilePath);
-                } else {
-                    throw err;  // Bubble up
+            if (fileIsStream && downloadConfigs.fix_streams_with_ffmpeg) {
+                //TODO show logs of this process
+                await remuxVideoWithFFmpeg(tmpDownloadFilePath, downloadFilePath);
+                unlinkSync(tmpDownloadFilePath);
+            } else {
+                // COMMENTED OUT as it broke the progress bars
+                // Download was successful, move rec to destination.
+                // logger.debug(`[${downloadName}] Moving file out of tmp folder`);
+                try {
+                    renameSync(tmpDownloadFilePath, downloadFilePath);
+                } catch (err) {
+                    if (err.code === 'EXDEV') {
+                        // COMMENTED OUT as it broke the progress bars
+                        // Cannot move files that are not in the top OverlayFS layer (e.g.: inside volumes)
+                        // logger.debug(`[${downloadName}] Probably inside a Docker container, falling back to copy-and-unlink`);
+                        const fileContents = readFileSync(tmpDownloadFilePath);
+                        writeFileSync(downloadFilePath, fileContents);
+                        unlinkSync(tmpDownloadFilePath);
+                    } else {
+                        throw err;  // Bubble up
+                    }
                 }
             }
         } catch (err) {
