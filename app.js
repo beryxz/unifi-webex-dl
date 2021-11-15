@@ -219,30 +219,27 @@ async function processCourses(configs, moodleSession) {
                 logger.warn(`[${course.id}] Skipping because of: ${err.message}`);
             });
 
-        coursesToProcess.push(coursePromise);
+        coursesToProcess.push(coursePromise || null);
     }
 
     for (const curCourse of coursesToProcess) {
-        await curCourse
-            .then(({ recordings, course }) => {
-                logger.info(`Working on course: ${course.id} - ${course.name ?? ''}`);
-                logger.info(`└─ Found ${recordings.totalCount} recordings (${recordings.filteredCount} filtered)`);
+        const courseData = await curCourse;
+        if (courseData) {
+            /*
+            //TODO DISABLED since on windows the name cannot contain some special chars.
+            //     Applying a sanitization step might solve this.
+            // Get course name if unspecified
+            if (!courseData.course.name) {
+                courseData.course.name = await getCourseName(moodleSession, courseData.course.id);
+                logger.info(`[${courseData.course.id}] Fetched course name: ${courseData.course.name}`);
+            }
+            */
 
-                return processCourseRecordings(course, recordings.recordings, configs.download);
-            })
-            .catch(err => {
-                throw err;
-            });
+            logger.info(`Working on course: ${courseData.course.id} - ${courseData.course.name ?? ''}`);
+            logger.info(`└─ Found ${courseData.recordings.totalCount} recordings (${courseData.recordings.filteredCount} filtered)`);
+            await processCourseRecordings(courseData.course, courseData.recordings.recordings, configs.download);
+        }                
     }
-
-    //TODO DISABLED since on windows the name cannot contain some special chars.
-    //     Applying a sanitization step might solve this.
-    //
-    // // Get course name if unspecified
-    // if (!course.name) {
-    //     course.name = await getCourseName(moodleSession, course.id);
-    //     logger.info(`[${course.id}] Fetched course name: ${course.name}`);
-    // }
 }
 
 (async () => {
