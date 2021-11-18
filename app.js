@@ -119,7 +119,7 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
                 fileIsStream = true;
                 logger.warn(`      └─ [${downloadName}] ${error}`);
                 logger.info(`      └─ [${downloadName}] Trying downloading stream`);
-                const { playlistUrl, filesize } = await retryPromise(5, 1000, () => getWebexRecordingHSLPlaylist(recording.recording_url, recording.password));
+                const { playlistUrl, filesize } = await retryPromise(10, 1000, () => getWebexRecordingHSLPlaylist(recording.recording_url, recording.password));
                 const downloadedSegments = await downloadHLSPlaylist(playlistUrl, tmpDownloadFolderPath, filesize, downloadConfigs.progress_bar, multiProgressBar, downloadName);
                 await mergeHLSPlaylistSegments(tmpDownloadFolderPath, tmpDownloadFilePath, downloadedSegments, downloadConfigs.progress_bar, multiProgressBar, downloadName);
             }

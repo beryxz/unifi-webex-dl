@@ -12,12 +12,12 @@ const exec = util.promisify(require('child_process').exec);
  * Max retries for each segment
  * @type {number}
  */
-const RETRY_COUNT = 10;
+const RETRY_COUNT = 20;
 /**
  * Delay before retrying each failed segment
  * @type {number}
  */
-const RETRY_DELAY = 200;
+const RETRY_DELAY = 1000;
 /**
  * Max number of segments downloaded simultaneously.
  * This highly depend on the machine and the connection.
