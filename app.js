@@ -212,33 +212,35 @@ async function processCourses(configs, moodleSession) {
     for (const course of configs.courses) {
         let coursePromise = retryPromise(3, 500, () => getRecordings(course, moodleSession))
             .then(recordings => ({
+                success:  true,
                 recordings: recordings,
                 course: course
             }))
-            .catch(err => {
-                logger.warn(`[${course.id}] Skipping because of: ${err.message}`);
-            });
+            .catch(err => ({
+                success: false,
+                err: err,
+                course: course
+            }));
 
-        coursesToProcess.push(coursePromise || null);
+        coursesToProcess.push(coursePromise);
     }
 
     for (const curCourse of coursesToProcess) {
-        const courseData = await curCourse;
-        if (courseData) {
-            /*
-            //TODO DISABLED since on windows the name cannot contain some special chars.
-            //     Applying a sanitization step might solve this.
-            // Get course name if unspecified
-            if (!courseData.course.name) {
-                courseData.course.name = await getCourseName(moodleSession, courseData.course.id);
-                logger.info(`[${courseData.course.id}] Fetched course name: ${courseData.course.name}`);
-            }
-            */
+        let { success, err, recordings, course } = await curCourse;
+        logger.info(`Working on course: ${course.id} - ${course.name ?? ''}`);
 
-            logger.info(`Working on course: ${courseData.course.id} - ${courseData.course.name ?? ''}`);
-            logger.info(`└─ Found ${courseData.recordings.totalCount} recordings (${courseData.recordings.filteredCount} filtered)`);
-            await processCourseRecordings(courseData.course, courseData.recordings.recordings, configs.download);
-        }                
+        if (!success) {
+            logger.error(`└─ Error retrieving recordings: ${err.message}`);
+            continue;
+        }
+
+        try {
+            logger.info(`└─ Found ${recordings.totalCount} recordings (${recordings.filteredCount} filtered)`);
+            await processCourseRecordings(course, recordings.recordings, configs.download);
+        } catch (err) {
+            logger.error(`└─ Error processing recordings: ${err.message}`);
+            continue;
+        }
     }
 }
 
