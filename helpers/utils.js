@@ -60,10 +60,10 @@ function replaceWhitespaceChars(text, replaceValue) {
 
 /**
  * Retries a promise until it's resolved or it fails too many times
- * @param {*} maxRetries the max number of retries before throwing an error if the functions keep failing
- * @param {*} timeoutOnError Time to wait before trying again to call fn
+ * @param {number} maxRetries the max number of retries before throwing an error if the functions keep failing
+ * @param {number} timeoutOnError Time to wait before trying again to call fn
  * @param {*} fn the function that is called each try
- * @returns
+ * @returns {Promise<void>}
  */
 function retryPromise(maxRetries, timeoutOnError, fn) {
     return fn().catch(async function (err) {
