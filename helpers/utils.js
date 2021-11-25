@@ -40,6 +40,25 @@ function isFilenameValidOnWindows(filename) {
 }
 
 /**
+ * Return the input text string with all special windows char replaced by another value
+ * @param {string} text The text from which to replace the windows special chars
+ * @param {string} replaceValue A string containing the text to replace the matches with
+ */
+function replaceWindowsSpecialChars(text, replaceValue) {
+    // eslint-disable-next-line no-control-regex
+    return text.replaceAll(/[<>:"/\\|?*\x00-\x1F\r\n]/g, replaceValue);
+}
+
+/**
+ * Return the input text string with all whitespace characters replaced by another value
+ * @param {string} text The text from which to replace the whitespace characters
+ * @param {string} replaceValue A string containing the text to replace the matches with
+ */
+function replaceWhitespaceChars(text, replaceValue) {
+    return text.replaceAll(/\s/g, replaceValue);
+}
+
+/**
  * Retries a promise until it's resolved or it fails too many times
  * @param {*} maxRetries the max number of retries before throwing an error if the functions keep failing
  * @param {*} timeoutOnError Time to wait before trying again to call fn
@@ -74,5 +93,7 @@ module.exports = {
     isNone,
     isFilenameValidOnWindows,
     sleep,
-    retryPromise
+    retryPromise,
+    replaceWindowsSpecialChars,
+    replaceWhitespaceChars
 };

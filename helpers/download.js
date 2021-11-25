@@ -247,11 +247,18 @@ async function mergeHLSPlaylistSegments(segmentsPath, resultFilePath, downloaded
     }
 }
 
-// TODO docs
-// demux and remux a video file, using ffmpeg, to fix container format and metadata issues.
+/**
+ * Demux and Remux a video file, using ffmpeg, to fix container format and metadata issues.
+ * Useful for downloaded HLS stream where resulting file is a mess of concatenated segments.
+ * @param {string} inputFilePath path to the file to remux
+ * @param {string} outputFilePath path where to save the remuxed file
+ * @returns {Promise<void>} resolved on success, rejected on failure
+ */
 async function remuxVideoWithFFmpeg(inputFilePath, outputFilePath) {
-    //TODO arguments should be further sanitized
-    return exec(`ffmpeg -v warning -y -i "${inputFilePath}" -c copy "${outputFilePath}"`)
+    let sanitizedInput = inputFilePath.replace('"', '_');
+    let sanitizedOutput = outputFilePath.replace('"', '_');
+
+    return exec(`ffmpeg -v warning -y -i "${sanitizedInput}" -c copy "${sanitizedOutput}"`)
         .then(({ stdout, stderr }) => {
             //TODO if stdout is not empty, an error or warning occurred. Example of when this happens?
             if (stdout || stderr) {
@@ -259,8 +266,6 @@ async function remuxVideoWithFFmpeg(inputFilePath, outputFilePath) {
                 logger.debug(stderr);
                 throw new Error('FFmpeg failed the remux process');
             }
-
-            return true;
         })
         .catch(err => {
             throw err;
