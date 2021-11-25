@@ -35,13 +35,18 @@ Note a few things:
 - Make sure to use the same UID and GID of your user in the `Dockerfile`. By default, they are both set to 1000;
 - If you use `.yaml` configs instead of `.json`, change the extension accordingly in `docker.sh`
 
-## PLEASE NOTE
+## PLEASE NOTE - Known issues
+
+Errors related to stream downloads:
+
+- If a recording doesn't seem to have the audio while reproducing it with the Windows Media Player, try with a different player such as VLC.
+- If there are stutters while scrubbing the timeline, this is caused by the way HLS recordings are downloaded. To solve this, install `ffmpeg`, enable the `fix_streams_with_ffmpeg` option and then delete-and-redownload the stream recordings.
 
 If a recording gives you an error, verify on Webex that it can actually be opened before opening an issue. Recordings could be disabled by the course organizer.
 
-If a recording doesn't seem to have the audio while reproducing it with the Windows Media Player, it's a known issue. Try with a different player and it should work.
-
 If you get a `429 Error`, it means that Webex received too many requests. In this case, you should wait sometime before trying again.
+
+If you download an event recording that doesn't ask for a password, it probably won't work. This case never occurred in my testings. Feel free to open an issue to let me know what happens.
 
 ## Config
 
@@ -53,17 +58,20 @@ The default config file path is `config.json` inside the root directory; you can
 
 ### Credentials
 
-- `username`: used for authenticating to the Moodle Platform.
-- `password`: used for authenticating to the Moodle Platform.
+| Key name   | Value type | Optional | Default value | Description                                              |
+|------------|------------|----------|---------------|----------------------------------------------------------|
+| `username` | string     | No       |               | Username used for authenticating to the Moodle Platform. |
+| `password` | string     | No       |               | Password used for authenticating to the Moodle Platform. |
 
 ### Download
 
-- `base_path`: path in which to download recordings
-- `progress_bar`: (Optional) boolean to set whether or not to show a progress bar while downloading the recordings. Defaults to `true`
-- `show_existing`: (Optional) boolean to set whether or not to show already downloaded recordings. Defaults to `true`
-- `max_concurrent_downloads`: (Optional) maximum number of parallel downloads. Defaults to `3`
-
-TODO `fix_streams_with_ffmpeg` remux with ffmpeg config and requirements
+| Key name                   | Value type | Optional | Default value | Description                                                                                                                                                                                   |
+|----------------------------|------------|----------|---------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `base_path`                | string     | No       |               | Path in which to download recordings.                                                                                                                                                         |
+| `progress_bar`             | boolean    | Yes      | true          | Show a progress bar while downloading the recordings.                                                                                                                                         |
+| `show_existing`            | boolean    | Yes      | true          | Show already downloaded recordings.                                                                                                                                                           |
+| `max_concurrent_downloads` | number     | Yes      | 3             | maximum number of parallel downloads.                                                                                                                                                         |
+| `fix_streams_with_ffmpeg`  | boolean    | Yes      | false         | Remux HLS recordings using ffmpeg. This requires ffmpeg to be installed and available on system path. Additionally, check that the h264/MPEG-4 formats are supported for remuxing operations. |
 
 ### Courses
 
@@ -71,13 +79,15 @@ TODO `fix_streams_with_ffmpeg` remux with ffmpeg config and requirements
 
 Please note that on Windows the `name` field shouldn't contain any of the not allowed characters, such as `: " *`. It is therefore recommended to keep the name simple using only letters, numbers, hyphens, and underscores.
 
-- `id` string: id of the course shown in the URL bar of Moodle
-- `name` string: prepended to the folder name and also shown in the logs
-- `custom_webex_id` string: (Optional) manually set the id of the Webex page instead of trying to match it from the course page
-- `skip_names` string: (Optional) regex to match recordings names to skip. Exclude slashes and flags from strings. E.g. `'test'` and NOT `'/test/i'`
-- `skip_before_date` string: (Optional) skip recordings before the date `YYYY-MM-DD`
-- `skip_after_date` string: (Optional) skip recordings after the date `YYYY-MM-DD`
-- `prepend_date` boolean: (Optional) prepend the date of the recording (`YYYYMMDD-`) to the filename
+| Key name           | Value type | Optional | Description                                                                                                         |
+|--------------------|------------|----------|---------------------------------------------------------------------------------------------------------------------|
+| `id`               | string     | No       | Id of the course shown in the URL bar of the Moodle's course page.                                                  |
+| `name`             | string     | No       | Name prepended to the folder name and also shown in the logs.                                                       |
+| `custom_webex_id`  | string     | Yes      | Manually set the id of the Webex page instead of trying to find it in the course page.                              |
+| `skip_names`       | string     | Yes      | Regex to match recordings names to skip. Exclude slashes and flags from strings. E.g. `'test'` and NOT `'/test/i'`. |
+| `skip_before_date` | string     | Yes      | Skip recordings before the date `YYYY-MM-DD`.                                                                       |
+| `skip_after_date`  | string     | Yes      | Skip recordings after the date `YYYY-MM-DD`.                                                                        |
+| `prepend_date`     | boolean    | Yes      | Prepend the date of the recording (`YYYYMMDD-`) to the filenames.                                                   |
 
 ## Environment variables
 
@@ -94,10 +104,6 @@ Courses can also be specified through the `COURSES` env variable using the follo
 ## Logging
 
 To modify the default log level of 'info', set the env variable `LOG_LEVEL` with one of [winston available log_level](https://github.com/winstonjs/winston#logging-levels).
-
-## Known issues
-
-If you download an event recording that doesn't ask for a password, it probably won't work. This case never occurred in my testings. Feel free to open an issue to let me know what happens.
 
 ## How it works
 
