@@ -1,6 +1,6 @@
 const logger = require('./logging')('download');
 const { retryPromise } = require('./utils');
-const { access, existsSync, createWriteStream, createReadStream, mkdir, unlinkSync, unlink } = require('fs');
+const { access, existsSync, createWriteStream, createReadStream, mkdir, unlinkSync } = require('fs');
 const axios = require('axios').default;
 const bytes = require('bytes');
 const url = require('url');
@@ -73,10 +73,7 @@ function mkdirIfNotExists(dir_path) {
  */
 async function downloadStream(url, savePath, showProgressBar = true, multiProgressBar = null, downloadName = '') {
     const { data, headers } = await axios.get(url, {
-        responseType: 'stream',
-        headers: {
-            'User-Agent': 'Mozilla/5.0'
-        }
+        responseType: 'stream'
     });
 
     if (multiProgressBar && showProgressBar) {
@@ -108,11 +105,7 @@ async function downloadStream(url, savePath, showProgressBar = true, multiProgre
  * @returns {Promise<string[]>} An array of segments URLs parsed from the playlist
  */
 async function parsePlaylistSegments(playlistUrl) {
-    const res = await axios.get(playlistUrl, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0'
-        }
-    });
+    const res = await axios.get(playlistUrl);
 
     return res.data.split(/[\r\n]+/).filter(row => !row.startsWith('#'));
 }
@@ -159,10 +152,7 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
             return new Promise((resolve, reject) => {
                 let dwnlFn = async () => {
                     const res = await axios.get(url.resolve(playlistUrl, segmentUrl), {
-                        responseType: 'stream',
-                        headers: {
-                            'User-Agent': 'Mozilla/5.0'
-                        }
+                        responseType: 'stream'
                     });
 
                     fileStream = createWriteStream(join(savePath, `${TMP_NUM}.ts`));

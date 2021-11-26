@@ -45,8 +45,7 @@ async function launchWebex(webexLaunchOptions) {
 
     let reqConfig = {
         headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'Mozilla/5.0'
+            'Content-Type': 'application/x-www-form-urlencoded'
         },
         timeout: WEBEX_REQUEST_TIMEOUT
     };
@@ -80,8 +79,7 @@ async function getWebexRecordings(webexObject) {
 
     let requestConfig = {
         headers: {
-            'Cookie': webexObject.cookies,
-            'User-Agent': 'Mozilla/5.0'
+            'Cookie': webexObject.cookies
         },
         timeout: WEBEX_REQUEST_TIMEOUT
     };
@@ -113,8 +111,7 @@ async function eventRecordingPassword(res, password) {
     logger.debug('Posting to recordAction.do');
     res = await axios.post(url, params, {
         headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'Mozilla/5.0'
+            'Content-Type': 'application/x-www-form-urlencoded'
         }
     });
     const cookies = getCookies(res.headers['set-cookie']);
@@ -152,8 +149,7 @@ async function eventRecordingPassword(res, password) {
     res = await axios.post(url, qs.stringify(params), {
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'Cookie': cookies,
-            'User-Agent': 'Mozilla/5.0'
+            'Cookie': cookies
         }
     });
 
@@ -180,8 +176,7 @@ async function eventRecordingPassword(res, password) {
     };
     res = await axios.post(url, qs.stringify(params), {
         headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'Mozilla/5.0'
+            'Content-Type': 'application/x-www-form-urlencoded'
         }
     });
     return res;
@@ -215,8 +210,7 @@ async function meetingRecordingPassword(res, password, fileUrl) {
         logger.debug('Checking params with recordingpasswordcheck.do');
         resultResponse = await axios.post(actionUrl.toString(), params, {
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'Mozilla/5.0'
+                'Content-Type': 'application/x-www-form-urlencoded'
             },
         });
     } else {
@@ -236,8 +230,7 @@ async function meetingRecordingPassword(res, password, fileUrl) {
     logger.debug('Posting to nbrshared.do');
     resultResponse = await axios.post(url.origin + url.pathname, url.search.substring(1), {
         headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'Mozilla/5.0'
+            'Content-Type': 'application/x-www-form-urlencoded'
         }
     });
     return resultResponse;
@@ -254,7 +247,7 @@ async function meetingRecordingPassword(res, password, fileUrl) {
 async function getWebexRecordingDownloadUrl(fileUrl, password) {
     let res, params;
 
-    res = await axios.get(fileUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    res = await axios.get(fileUrl);
     if (/(ico-warning|TblContentFont2)/.test(res.data))
         throw new Error('Recording deleted, not available, or not downloadable.');
 
@@ -287,9 +280,6 @@ async function getWebexRecordingDownloadUrl(fileUrl, password) {
         // get nbrPrepare.do
         logger.debug('Checking recording status nbrPrepare.do');
         res = await axios.get('https://unifirenze.webex.com/mw3300/mywebex/nbrPrepare.do', {
-            headers: {
-                'User-Agent': 'Mozilla/5.0'
-            },
             params: {
                 siteurl: 'unifirenze',
                 ...params
@@ -337,8 +327,7 @@ async function recordingStreamOptions(recording_url, password) {
     // get stream options
     res = await axios.get(`https://unifirenze.webex.com/webappng/api/v1/recordings/${recordingId}/stream?siteurl=unifirenze`, {
         headers: {
-            accessPwd: password,
-            'User-Agent': 'Mozilla/5.0'
+            accessPwd: password
         }
     });
     if (!res.data?.mp4StreamOption)
@@ -369,9 +358,6 @@ async function getWebexRecordingHSLPlaylist(recording_url, password) {
     let res = await axios({
         method: 'post',
         url: 'https://nfg1vss.webex.com/apis/html5-pipeline.do',
-        headers: {
-            'User-Agent': 'Mozilla/5.0'
-        },
         params: {
             recordingDir: mp4StreamOption.recordingDir,
             timestamp: mp4StreamOption.timestamp,

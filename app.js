@@ -1,6 +1,6 @@
 const config = require('./helpers/config');
 const { createHash } = require('crypto');
-const { loginMoodleUnifiedAuth, getWebexLaunchOptions } = require('./helpers/moodle');
+const { Moodle } = require('./helpers/moodle');
 const { launchWebex, getWebexRecordings, getWebexRecordingDownloadUrl, getWebexRecordingHSLPlaylist } = require('./helpers/webex');
 const logger = require('./helpers/logging')('app');
 const { join } = require('path');
@@ -9,6 +9,7 @@ const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists, mergeHLSPlaylistS
 const { getUTCDateTimestamp } = require('./helpers/date');
 const MultiProgressBar = require('./helpers/MultiProgressBar');
 const { splitArrayInChunksOfFixedLength, retryPromise, sleep, replaceWindowsSpecialChars, replaceWhitespaceChars } = require('./helpers/utils');
+const { default: axios } = require('axios');
 
 /**
  * Load the proper config file.
@@ -51,22 +52,23 @@ async function createTempFolder() {
 }
 
 /**
+ * @param {Moodle} moodle
  * @param {config.Config} configs
- * @returns {Promise<string>} Moodle session token cookie
+ * @returns {Promise<void>}
  */
-async function loginToMoodle(configs) {
+async function loginToMoodle(moodle, configs) {
     logger.info('Logging into Moodle');
-    return loginMoodleUnifiedAuth(configs.credentials.username, configs.credentials.password);
+    moodle.loginMoodleUnifiedAuth(configs.credentials.username, configs.credentials.password);
 }
 
 /**
  * Get all recordings, applying filters specified in the course's config
  * @param {config.Course} course
- * @param {string} moodleSession
+ * @param {Moodle} moodle
  * @return {Promise<object>}
  */
-async function getRecordings(course, moodleSession) {
-    return await getWebexLaunchOptions(moodleSession, course.id, course?.custom_webex_id)
+async function getRecordings(course, moodle) {
+    return await moodle.getWebexLaunchOptions(course.id, course?.custom_webex_id)
         .then(webexLaunch => launchWebex(webexLaunch))
         .then(webexObject => getWebexRecordings(webexObject))
         .then(recordingsAll => {
@@ -202,16 +204,16 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
  *
  * Initially, the recordings list are fetched simultaneously.
  * Then, each recordings list is processed individually.
+ * @param {Moodle} moodle
  * @param {config.Config} configs
- * @param {string} moodleSession
  * @returns {Promise<void>}
  */
-async function processCourses(configs, moodleSession) {
+async function processCourses(moodle, configs) {
     logger.info('Fetching recordings lists');
 
     let coursesToProcess = [];
     for (const course of configs.courses) {
-        let coursePromise = retryPromise(3, 500, () => getRecordings(course, moodleSession))
+        let coursePromise = retryPromise(3, 500, () => getRecordings(course, moodle))
             .then(recordings => ({
                 success:  true,
                 recordings: recordings,
@@ -245,16 +247,28 @@ async function processCourses(configs, moodleSession) {
     }
 }
 
+/**
+ * Setup common configs for axios static instance
+ */
+function setupAxios() {
+    Object.assign(axios.defaults, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0'
+        }
+    });
+}
+
 (async () => {
     try {
-        // get moodle credentials and courses ids
-        let configs = await loadConfig();
-
+        setupAxios();
         await createTempFolder();
 
-        const moodleSession = await loginToMoodle(configs);
+        let configs = await loadConfig();
 
-        await processCourses(configs, moodleSession);
+        const moodle = new Moodle();
+        await loginToMoodle(moodle, configs);
+
+        await processCourses(moodle, configs);
 
         logger.info('Done');
     } catch (err) {
