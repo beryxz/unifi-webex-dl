@@ -1,6 +1,6 @@
 const config = require('./helpers/config');
 const { createHash } = require('crypto');
-const { Moodle } = require('./helpers/moodle');
+const Moodle = require('./helpers/moodle');
 const { launchWebex, getWebexRecordings, getWebexRecordingDownloadUrl, getWebexRecordingHSLPlaylist } = require('./helpers/webex');
 const logger = require('./helpers/logging')('app');
 const { join } = require('path');
@@ -12,7 +12,24 @@ const { splitArrayInChunksOfFixedLength, retryPromise, sleep, replaceWindowsSpec
 const { default: axios } = require('axios');
 
 /**
- * Load the proper config file.
+ * @typedef FetchedCourse
+ * @type {object}
+ * @property {boolean} success if the course was fetched succesfully. If false, check the `err` property for additional details.
+ * @property {FetchedRecordings} [recordings] List of recordings of the course
+ * @property {config.Course} [course]
+ * @property {any} [err]
+ */
+
+/**
+ * @typedef FetchedRecordings
+ * @type {object}
+ * @property {import('./helpers/webex').Recording[]} recordings
+ * @property {number} totalCount
+ * @property {number} filteredCount
+ */
+
+/**
+ * Helper to load the proper config file.
  * First it tries to load config.json, if it doesn't exist, config.yaml is tried next
  * @return {Promise<config.Config>} configs
  */
@@ -36,7 +53,7 @@ async function loadConfig() {
 }
 
 /**
- * Creates the temp folder removing all temp files of previous executions that were abruptly interrupted
+ * Helper to create the temp folder removing all temp files of previous executions that were abruptly interrupted
  * @returns {Promise<void>}
  * @throws {Error} If temp directory couldn't be created
  */
@@ -52,6 +69,7 @@ async function createTempFolder() {
 }
 
 /**
+ * Helper to login to Moodle
  * @param {Moodle} moodle
  * @param {config.Config} configs
  * @returns {Promise<void>}
@@ -65,7 +83,7 @@ async function loginToMoodle(moodle, configs) {
  * Get all recordings, applying filters specified in the course's config
  * @param {config.Course} course
  * @param {Moodle} moodle
- * @return {Promise<object>}
+ * @return {Promise<FetchedRecordings>}
  */
 async function getRecordings(course, moodle) {
     return await moodle.getWebexLaunchOptions(course.id, course?.custom_webex_id)
@@ -101,6 +119,7 @@ async function getRecordings(course, moodle) {
  * @param {string} downloadFilePath Final file save-path after download its complete
  * @param {string} tmpDownloadFolderPath Temporary save-path folder, used until the download its complete
  * @param {MultiProgressBar} [multiProgressBar=null] MultiProgressBar instance to render download status
+ * @returns {Promise<void>}
  */
 async function downloadRecordingIfNotExists(recording, downloadConfigs, downloadFilePath, tmpDownloadFolderPath, multiProgressBar = null) {
     if (existsSync(downloadFilePath)) {
@@ -162,7 +181,7 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
  * Process a moodle course's recordings, and download all missing ones from webex
  * @param {config.Course} course The moodle course to process
  * @param {import('./helpers/webex').Recording[]} recordings Recordings to process
- * @param {config.ConfigDownload} downloadConfigs Download section configs
+ * @param {Promise<config.ConfigDownload>} downloadConfigs Download section configs
  */
 async function processCourseRecordings(course, recordings, downloadConfigs) {
     let chunks = splitArrayInChunksOfFixedLength(recordings, downloadConfigs.max_concurrent_downloads);
@@ -195,8 +214,34 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
                 });
         });
 
-        await Promise.all(downloads);
+        await Promise.all(downloads).catch(err => {throw err;});
     }
+}
+
+/**
+ * Fetch the recordings list for each course
+ * @param {Moodle} moodle Moodle instance
+ * @param {config.Course[]} courses List of courses to fetchs
+ * @return {Promise<Array.<Promise<FetchedCourse>>>}
+ */
+async function getCourses(moodle, courses) {
+    logger.info('Fetching recordings lists');
+
+    return courses.map((course) =>
+        retryPromise(3, 500, () => getRecordings(course, moodle))
+            .then(/** @returns {FetchedCourse} */
+                recordings => ({
+                    success:  true,
+                    recordings: recordings,
+                    course: course
+                }))
+            .catch(/** @returns {FetchedCourse} */
+                err => ({
+                    success: false,
+                    err: err,
+                    course: course
+                }))
+    );
 }
 
 /**
@@ -209,24 +254,7 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
  * @returns {Promise<void>}
  */
 async function processCourses(moodle, configs) {
-    logger.info('Fetching recordings lists');
-
-    let coursesToProcess = [];
-    for (const course of configs.courses) {
-        let coursePromise = retryPromise(3, 500, () => getRecordings(course, moodle))
-            .then(recordings => ({
-                success:  true,
-                recordings: recordings,
-                course: course
-            }))
-            .catch(err => ({
-                success: false,
-                err: err,
-                course: course
-            }));
-
-        coursesToProcess.push(coursePromise);
-    }
+    const coursesToProcess = await getCourses(moodle, configs.courses);
 
     for (const curCourse of coursesToProcess) {
         let { success, err, recordings, course } = await curCourse;

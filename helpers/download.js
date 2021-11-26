@@ -1,5 +1,5 @@
 const logger = require('./logging')('download');
-const { retryPromise } = require('./utils');
+const { retryPromise, splitArrayInChunksOfFixedLength } = require('./utils');
 const { access, existsSync, createWriteStream, createReadStream, mkdir, unlinkSync } = require('fs');
 const axios = require('axios').default;
 const bytes = require('bytes');
@@ -7,8 +7,6 @@ const url = require('url');
 const { join } = require('path');
 const util = require('util');
 const exec = util.promisify(require('child_process').exec);
-
-//TODO generalize axios instance to include custom User-Agent header by default
 
 /**
  * Max retries for each segment
@@ -142,10 +140,10 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
 
     // download each segment
     let segmentNum = 1;
-    for (let i = 0, j = segments.length; i < j; i += MAX_PARALLEL_SEGMENTS) {
-        let chunk = segments.slice(i, i + MAX_PARALLEL_SEGMENTS);
+    let chunks = splitArrayInChunksOfFixedLength(segments, MAX_PARALLEL_SEGMENTS);
 
-        let chunks = chunk.map(segmentUrl => {
+    for (const chunk of chunks) {
+        let segments = chunk.map(segmentUrl => {
             const TMP_NUM = segmentNum++;
 
             // download segment
@@ -172,7 +170,7 @@ async function downloadHLSPlaylist(playlistUrl, savePath, filesize, showProgress
             });
         });
 
-        await Promise.all(chunks).catch(err =>  {throw err;});
+        await Promise.all(segments).catch(err => {throw err;});
     }
 
     return totSegments;

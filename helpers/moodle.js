@@ -3,6 +3,7 @@ const qs = require('qs');
 const cheerio = require('cheerio');
 const logger = require('./logging')('moodle');
 const { checkMoodleCookie } = require('./cookie');
+const { AuthenticationError } = require('./error');
 
 /**
  * @typedef WebexLaunchOptions
@@ -13,7 +14,10 @@ const { checkMoodleCookie } = require('./cookie');
  */
 
 class Moodle {
-    _sessionToken;
+    /**
+     * Session token for moodle requests
+     * @type {string}
+     */
     get sessionToken() {
         return this._sessionToken;
     }
@@ -21,57 +25,16 @@ class Moodle {
         this._sessionToken = value;
     }
 
-    constructor() {}
+    constructor() {
+        this._sessionToken = null;
+    }
 
     /**
-     * Old way of Logging into the Moodle platform.
-     * @deprecated since version 4.0.0
-     * @param {string} username Moodle username
-     * @param {string} password Moodle password
-     * @returns {string} Moodle session token cookie
+     * Throws an error if the instance isn't authenticated to Moodle
+     * @throws instance is not authenticated to moodle
      */
-    async loginMoodle(username, password) {
-        let res, loginToken, cookie;
-
-        // get loginToken
-        logger.debug('Loading login');
-        res = await axios.get('https://e-l.unifi.it/login/index.php');
-        loginToken = res.data.match(/logintoken" value="(.+?)"/)[1];
-        cookie = checkMoodleCookie(res.headers['set-cookie']);
-        logger.debug(`├─ Cookie: ${cookie}`);
-        logger.debug(`└─ loginToken: ${loginToken}`);
-
-        // post credentials
-        logger.debug('Posting form to login');
-        res = await axios.post('https://e-l.unifi.it/login/index.php', qs.stringify({
-            anchor: null,
-            logintoken: loginToken,
-            username: username,
-            password: password,
-            rememberusername: 0
-        }), {
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Cookie': cookie
-            },
-            maxRedirects: 0,
-            validateStatus: status => status >= 200 && status < 300 || status === 303
-        });
-        cookie = checkMoodleCookie(res.headers['set-cookie']);
-        logger.debug(`└─ Cookie: ${cookie}`);
-
-        // Check credentials
-        logger.debug('Checking credentials');
-        res = await axios.get('https://e-l.unifi.it/login/index.php', {
-            headers: {
-                'Cookie': cookie
-            }
-        });
-        if (res.data.match(/loginerrormessage/) !== null) {
-            throw new Error('Invalid credentials');
-        }
-
-        return cookie;
+    checkAuth() {
+        if (!this.sessionToken) throw new AuthenticationError('Not authenticated to Moodle');
     }
 
     /**
@@ -83,13 +46,15 @@ class Moodle {
     async loginMoodleUnifiedAuth(username, password) {
         let res, executionToken, cookie;
 
+        let loginPortalUrl = 'https://identity.unifi.it/cas/login?service=https://e-l.unifi.it/login/index.php?authCASattras=CASattras';
+
         // get loginToken
         logger.debug('Loading login portal');
-        res = await axios.get('https://identity.unifi.it/cas/login?service=https://e-l.unifi.it/login/index.php?authCASattras=CASattras');
+        res = await axios.get(loginPortalUrl);
         executionToken = res.data.match(/name="execution" value="(.+?)"/)[1];
 
         logger.debug('Posting form to login portal');
-        res = await axios.post('https://identity.unifi.it/cas/login?service=https://e-l.unifi.it/login/index.php?authCASattras=CASattras', qs.stringify({
+        res = await axios.post(loginPortalUrl, qs.stringify({
             username: username,
             password: password,
             execution: executionToken,
@@ -123,12 +88,16 @@ class Moodle {
 
     /**
      * Extract the course name from the moodle course page
-     * @requires //TODO auth
+     *
+     * Requires the login method to be called first.
      * @param {number} courseId Moodle course id
-     * @returns {String|null} The course name if it was found, null otherwise
-     * @throws when axios request wasn't successful
+     * @returns {Promise<string|null>} The course name if it was found, null otherwise
+     * @throws {AuthenticationError} If not alredy authenticated
+     * @throws {Error} when axios request wasn't successful
      */
     async getCourseName(courseId) {
+        this.checkAuth();
+
         const res = await axios.get('https://e-l.unifi.it/course/view.php', {
             params: {
                 id: courseId
@@ -144,12 +113,16 @@ class Moodle {
 
     /**
      * Extract the webex id from the moodle course page
-     * @requires //TODO auth
+     *
+     * Requires the login method to be called first.
      * @param {number} courseId Moodle course id
-     * @returns {null|string} The id if it was found, null otherwise
-     * @throws when axios request wasn't successful
+     * @returns {Promise<string|null>} The id if it was found, null otherwise
+     * @throws {AuthenticationError} If not alredy authenticated
+     * @throws {Error} when axios request wasn't successful
      */
     async getWebexId(courseId) {
+        this.checkAuth();
+
         const res = await axios.get('https://e-l.unifi.it/course/view.php', {
             params: {
                 id: courseId
@@ -178,12 +151,16 @@ class Moodle {
 
     /**
      * Get the required parameters to access the webex page of the webex course extracted from, the moodle page of the given course id.
-     * @requires //TODO auth
+     *
+     * Requires the login method to be called first.
      * @param {number} courseId Course id from which to retrieve webexId and then the relative launch parameters
      * @param {string|number} [customWebexId=null] Custom Webex id that override the one found in the course page, if defined
-     * @return {WebexLaunchOptions}
+     * @throws {AuthenticationError} If not alredy authenticated
+     * @return {Promise<WebexLaunchOptions>}
      */
     async getWebexLaunchOptions(courseId, customWebexId=null) {
+        this.checkAuth();
+
         try {
             // Get webex id if not overridden
             let webexId;
@@ -220,6 +197,4 @@ class Moodle {
     }
 }
 
-module.exports = {
-    Moodle
-};
+module.exports = Moodle;

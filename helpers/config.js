@@ -42,7 +42,7 @@ const yaml = require('yaml');
 
 /**
  * Assert that every config isn't undefined or null
- * @param {Object} configs Object of configs
+ * @param {object} configs Object of configs
  * @throws Error with erroneous config
  */
 function checkConfigs(configs) {
@@ -54,7 +54,7 @@ function checkConfigs(configs) {
 
 /**
  * Check that each Course object in the array is valid
- * @param {Array} courses Array of course objects
+ * @param {Course[]} courses Array of course objects
  */
 function checkCourses(courses) {
     for (const c of courses) {
