@@ -8,7 +8,7 @@ const { join } = require('path');
 const { existsSync, readdirSync, unlinkSync, rmSync } = require('fs');
 const { StreamDownload, HLSDownload } = require('./helpers/download');
 const { getUTCDateTimestamp } = require('./helpers/date');
-const { MultiProgressBar, StatusProgressBar } = require('./helpers/progressbar');
+const { MultiProgressBar, StatusProgressBar, OneShotProgressBar } = require('./helpers/progressbar');
 const { splitArrayInChunksOfFixedLength, retryPromise, sleep, replaceWindowsSpecialChars, replaceWhitespaceChars, mkdirIfNotExists, moveFile } = require('./helpers/utils');
 const { default: axios } = require('axios');
 
@@ -180,9 +180,13 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
 
         // Download was successful, move rec to destination.
         if (fileIsStream && downloadConfigs.fix_streams_with_ffmpeg) {
-            //TODO show logs of this process
+            let progressBar = new OneShotProgressBar(multiProgressBar, `[${downloadName}] REMUX`);
+            progressBar.init();
+
             await HLSDownload.remuxVideoWithFFmpeg(tmpDownloadFilePath, downloadFilePath);
             unlinkSync(tmpDownloadFilePath);
+
+            progressBar.complete();
         } else {
             moveFile(tmpDownloadFilePath, downloadFilePath);
         }

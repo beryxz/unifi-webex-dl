@@ -126,7 +126,36 @@ class StatusProgressBar {
     }
 }
 
+class OneShotProgressBar {
+    constructor(multiProgressBar, title) {
+        /** @type {ProgressBar} */
+        this.bar = null;
+        this._multiProgressBar = multiProgressBar;
+        this._title = title;
+    }
+
+    init() {
+        if (this.bar) return;
+
+        this.bar = this._multiProgressBar.newBar(`${this._title} > [:bar] :percent :etas`, {
+            width: 20,
+            complete: '=',
+            incomplete: ' ',
+            renderThrottle: 100,
+            clear: true,
+            total: 100
+        });
+    }
+
+    complete() {
+        if (!this.bar) return;
+
+        this.bar.update(1);
+    }
+}
+
 module.exports = {
     MultiProgressBar,
-    StatusProgressBar
+    StatusProgressBar,
+    OneShotProgressBar
 };
