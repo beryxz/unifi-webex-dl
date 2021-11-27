@@ -1,3 +1,5 @@
+const { access, mkdir } = require('fs');
+
 /**
  * Split the source array in chunks of fixed length.
  * The last chunk is filled with the remaining objects that might not be less than fixed chunk length
@@ -8,6 +10,8 @@
  * @returns {any[][]} array of chunks
  */
 function splitArrayInChunksOfFixedLength(sourceArray, chunkLength) {
+    if (!sourceArray) throw new Error('Undefined source array to be split');
+    if (!chunkLength) throw new Error('Undefined chunk length');
     if (chunkLength < 1) return [sourceArray];
 
     const srcLen = sourceArray.length;
@@ -88,6 +92,30 @@ function sleep(timeout) {
     });
 }
 
+/**
+ * Asynchronously make the dir path if it doesn't exists
+ * @param {string} dir_path The path to the dir
+ * @returns {Promise}
+ */
+function mkdirIfNotExists(dir_path) {
+    return new Promise((resolve, reject) => {
+        // try to access
+        access(dir_path, (err) => {
+            if (err && err.code === 'ENOENT') {
+                // dir doesn't exist, creating it
+                mkdir(dir_path, { recursive: true }, (err) => {
+                    if (err)
+                        reject(`Error creating directory. ${err.code}`);
+                    resolve();
+                });
+            } else {
+                // dir exists
+                resolve();
+            }
+        });
+    });
+}
+
 module.exports = {
     splitArrayInChunksOfFixedLength,
     isNone,
@@ -95,5 +123,6 @@ module.exports = {
     sleep,
     retryPromise,
     replaceWindowsSpecialChars,
-    replaceWhitespaceChars
+    replaceWhitespaceChars,
+    mkdirIfNotExists
 };

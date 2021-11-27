@@ -1,14 +1,15 @@
 const config = require('./helpers/config');
 const { createHash } = require('crypto');
 const Moodle = require('./helpers/moodle');
+const bytes = require('bytes');
 const { launchWebex, getWebexRecordings, getWebexRecordingDownloadUrl, getWebexRecordingHSLPlaylist } = require('./helpers/webex');
 const logger = require('./helpers/logging')('app');
 const { join } = require('path');
 const { existsSync, renameSync, readdirSync, readFileSync, unlinkSync, writeFileSync, rmSync } = require('fs');
-const { downloadStream, downloadHLSPlaylist, mkdirIfNotExists, mergeHLSPlaylistSegments, remuxVideoWithFFmpeg } = require('./helpers/download');
+const { StreamDownload, HLSDownload } = require('./helpers/download');
 const { getUTCDateTimestamp } = require('./helpers/date');
-const MultiProgressBar = require('./helpers/MultiProgressBar');
-const { splitArrayInChunksOfFixedLength, retryPromise, sleep, replaceWindowsSpecialChars, replaceWhitespaceChars } = require('./helpers/utils');
+const { MultiProgressBar, StatusProgressBar } = require('./helpers/progressbar');
+const { splitArrayInChunksOfFixedLength, retryPromise, sleep, replaceWindowsSpecialChars, replaceWhitespaceChars, mkdirIfNotExists } = require('./helpers/utils');
 const { default: axios } = require('axios');
 
 /**
@@ -27,6 +28,17 @@ const { default: axios } = require('axios');
  * @property {number} totalCount
  * @property {number} filteredCount
  */
+
+/**
+ * @type {bytes.BytesOptions}
+ */
+const BYTES_OPTIONS = {
+    decimalPlaces: 2,
+    fixedDecimals: true,
+    thousandsSeparator: '',
+    unit: 'MB',
+    unitSeparator: '',
+};
 
 /**
  * Helper to load the proper config file.
@@ -136,25 +148,40 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
         let tmpDownloadFilePath = join(tmpDownloadFolderPath, 'recording.mp4');
         let fileIsStream = false;
 
-        //TODO generalize the parameters (downloadConfigs.progress_bar, multiProgressBar, downloadName)
         // Try to use webex download feature and if it fails, fallback to hls stream feature
         try {
             logger.debug(`      └─ [${downloadName}] Trying download feature`);
             const downloadUrl = await getWebexRecordingDownloadUrl(recording.file_url, recording.password);
-            await downloadStream(downloadUrl, tmpDownloadFilePath, downloadConfigs.progress_bar, multiProgressBar, downloadName);
+
+            let dwnl = new StreamDownload();
+            if (downloadConfigs.progress_bar)
+                new StatusProgressBar(
+                    multiProgressBar,
+                    dwnl.emitter,
+                    (data) => `[${downloadName}] ${bytes(parseInt(data.filesize), BYTES_OPTIONS).padStart(9)}`,
+                    (data) => data.filesize,
+                    (data) => data.chunk.length);
+            await dwnl.downloadStream(downloadUrl, tmpDownloadFilePath);
         } catch (error) {
             fileIsStream = true;
             logger.warn(`      └─ [${downloadName}] ${error}`);
             logger.info(`      └─ [${downloadName}] Trying downloading stream`);
             const { playlistUrl, filesize } = await retryPromise(10, 1000, () => getWebexRecordingHSLPlaylist(recording.recording_url, recording.password));
-            const downloadedSegments = await downloadHLSPlaylist(playlistUrl, tmpDownloadFolderPath, filesize, downloadConfigs.progress_bar, multiProgressBar, downloadName);
-            await mergeHLSPlaylistSegments(tmpDownloadFolderPath, tmpDownloadFilePath, downloadedSegments, downloadConfigs.progress_bar, multiProgressBar, downloadName);
+            let dwnl = new HLSDownload(tmpDownloadFolderPath);
+            if (downloadConfigs.progress_bar)
+                new StatusProgressBar(
+                    multiProgressBar,
+                    dwnl.emitter,
+                    (data) => `[${downloadName}] ${(data.stage === 'DOWNLOAD') ? (bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9)) : 'MERGE'}`,
+                    (data) => data.segmentsCount,
+                    () => null);
+            await dwnl.downloadHLS(playlistUrl, tmpDownloadFilePath);
         }
 
         // Download was successful, move rec to destination.
         if (fileIsStream && downloadConfigs.fix_streams_with_ffmpeg) {
             //TODO show logs of this process
-            await remuxVideoWithFFmpeg(tmpDownloadFilePath, downloadFilePath);
+            await HLSDownload.remuxVideoWithFFmpeg(tmpDownloadFilePath, downloadFilePath);
             unlinkSync(tmpDownloadFilePath);
         } else {
             try {

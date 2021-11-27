@@ -83,4 +83,50 @@ class MultiProgressBar {
     // }
 }
 
-module.exports = MultiProgressBar;
+/**
+ * Returns a value to be used, it could be based on the additional data retrieved
+ * @callback GetterCallback
+ * @param {object} data additional data
+ * @returns {any}
+ */
+
+/**
+ * Progress bar for tracking status of an EventEmitter, inside a MultiProgressBar group
+ */
+class StatusProgressBar {
+    /**
+     * @param {MultiProgressBar} multiProgressBar MultiProgressBar instance where to create the new bar
+     * @param {EventEmitter} emitter Event emitter that emits 'init' for bar creation, and 'data' for updating bar with bar tick.
+     * @param {GetterCallback} titleGetter Function that returns the value to be used as the title for the bar creation. Uses `data` from the 'init' event.
+     * @param {GetterCallback} totalGetter Function that returns the value to be used as the total for the bar creation. Uses `data` from the 'init' event.
+     * @param {GetterCallback} tickAmountGetter Function that returns the value to be used as the tick amount for the bar update. Uses `data` from the 'data' event.
+     */
+    constructor(multiProgressBar, emitter, titleGetter, totalGetter, tickAmountGetter) {
+        this.bar = null;
+        this._multiProgressBar = multiProgressBar;
+        this._emitter = emitter;
+        this._titleGetter = titleGetter;
+        this._totalGetter = totalGetter;
+        this._tickAmountGetter = tickAmountGetter;
+
+        emitter.on('init', (data) => {
+            this.bar = multiProgressBar.newBar(`${this._titleGetter(data)} > [:bar] :percent :etas`, {
+                width: 20,
+                complete: '=',
+                incomplete: ' ',
+                renderThrottle: 100,
+                clear: true,
+                total: this._totalGetter(data)
+            });
+        });
+
+        emitter.on('data', (data) => {
+            this.bar.tick(this._tickAmountGetter(data));
+        });
+    }
+}
+
+module.exports = {
+    MultiProgressBar,
+    StatusProgressBar
+};
