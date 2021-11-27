@@ -1,4 +1,4 @@
-const { access, mkdir } = require('fs');
+const { access, mkdir, writeFileSync, unlinkSync, readFileSync, renameSync } = require('fs');
 
 /**
  * Split the source array in chunks of fixed length.
@@ -94,16 +94,16 @@ function sleep(timeout) {
 
 /**
  * Asynchronously make the dir path if it doesn't exists
- * @param {string} dir_path The path to the dir
+ * @param {string} dirPath The path to the dir
  * @returns {Promise}
  */
-function mkdirIfNotExists(dir_path) {
+function mkdirIfNotExists(dirPath) {
     return new Promise((resolve, reject) => {
         // try to access
-        access(dir_path, (err) => {
+        access(dirPath, (err) => {
             if (err && err.code === 'ENOENT') {
                 // dir doesn't exist, creating it
-                mkdir(dir_path, { recursive: true }, (err) => {
+                mkdir(dirPath, { recursive: true }, (err) => {
                     if (err)
                         reject(`Error creating directory. ${err.code}`);
                     resolve();
@@ -116,6 +116,29 @@ function mkdirIfNotExists(dir_path) {
     });
 }
 
+/**
+ * Move a file.
+ * First, it tries to rename the file. If it doesn't work, it then tries to copy it to the new destination, deleting the old one.
+ * @param {string} srcPath source path
+ * @param {string} dstPath destination path
+ * @throws Throws an error if it fails all move strategies
+ */
+function moveFile(srcPath, dstPath) {
+    try {
+        renameSync(srcPath, dstPath);
+    } catch (err) {
+        if (err.code === 'EXDEV') {
+            // Cannot move files that are not in the top OverlayFS layer (e.g.: inside volumes)
+            // Probably inside a Docker container, falling back to copy-and-unlink
+            const fileContents = readFileSync(srcPath);
+            writeFileSync(dstPath, fileContents);
+            unlinkSync(srcPath);
+        } else {
+            throw err;
+        }
+    }
+}
+
 module.exports = {
     splitArrayInChunksOfFixedLength,
     isNone,
@@ -124,5 +147,6 @@ module.exports = {
     retryPromise,
     replaceWindowsSpecialChars,
     replaceWhitespaceChars,
-    mkdirIfNotExists
+    mkdirIfNotExists,
+    moveFile
 };

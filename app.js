@@ -5,11 +5,11 @@ const bytes = require('bytes');
 const { launchWebex, getWebexRecordings, getWebexRecordingDownloadUrl, getWebexRecordingHSLPlaylist } = require('./helpers/webex');
 const logger = require('./helpers/logging')('app');
 const { join } = require('path');
-const { existsSync, renameSync, readdirSync, readFileSync, unlinkSync, writeFileSync, rmSync } = require('fs');
+const { existsSync, readdirSync, unlinkSync, rmSync } = require('fs');
 const { StreamDownload, HLSDownload } = require('./helpers/download');
 const { getUTCDateTimestamp } = require('./helpers/date');
 const { MultiProgressBar, StatusProgressBar } = require('./helpers/progressbar');
-const { splitArrayInChunksOfFixedLength, retryPromise, sleep, replaceWindowsSpecialChars, replaceWhitespaceChars, mkdirIfNotExists } = require('./helpers/utils');
+const { splitArrayInChunksOfFixedLength, retryPromise, sleep, replaceWindowsSpecialChars, replaceWhitespaceChars, mkdirIfNotExists, moveFile } = require('./helpers/utils');
 const { default: axios } = require('axios');
 
 /**
@@ -184,19 +184,7 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
             await HLSDownload.remuxVideoWithFFmpeg(tmpDownloadFilePath, downloadFilePath);
             unlinkSync(tmpDownloadFilePath);
         } else {
-            try {
-                renameSync(tmpDownloadFilePath, downloadFilePath);
-            } catch (err) {
-                if (err.code === 'EXDEV') {
-                    // Cannot move files that are not in the top OverlayFS layer (e.g.: inside volumes)
-                    // Probably inside a Docker container, falling back to copy-and-unlink
-                    const fileContents = readFileSync(tmpDownloadFilePath);
-                    writeFileSync(downloadFilePath, fileContents);
-                    unlinkSync(tmpDownloadFilePath);
-                } else {
-                    throw err;
-                }
-            }
+            moveFile(tmpDownloadFilePath, downloadFilePath);
         }
     } catch (err) {
         logger.error(`      └─ [${downloadName}] Skipped because of: ${err.message}`);
