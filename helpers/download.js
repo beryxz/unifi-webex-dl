@@ -45,7 +45,14 @@ class StreamDownload extends Download {
 
         await (new Promise((resolve, reject) => {
             writer.on('finish', resolve);
-            writer.on('error', reject);
+            writer.on('error', (err) => {
+                this.emitter.emit('error');
+                reject(err);
+            });
+            data.on('error', (err) => {
+                this.emitter.emit('error');
+                reject(err);
+            });
         }));
     }
 }
@@ -176,7 +183,8 @@ class HLSDownload extends Download {
 
                     retryPromise(HLSDownload.SEGMENT_RETRY_COUNT, HLSDownload.SEGMENT_RETRY_DELAY, dwnlFn)
                         .catch(err => {
-                            reject(new Error(`Segment ${segmentNum} failed downloading because of: ${err.message}`));
+                            this.emitter.emit('error');
+                            reject(new Error(`Segment ${segmentNum}: ${err.message}`));
                         });
                 });
             });

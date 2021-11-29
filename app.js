@@ -205,7 +205,6 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
 async function processCourseRecordings(course, recordings, downloadConfigs) {
     let chunks = splitArrayInChunksOfFixedLength(recordings, downloadConfigs.max_concurrent_downloads);
 
-    //TODO Additional Logger messages from functions might be overwritten by the MultiProgressBar set that continuously updates and overwrites everything. If for example one recording's download fails, the error message is overwritten if there are other lessons that are still downloading.
     for (const chunk of chunks) {
         const multiProgressBar = new MultiProgressBar();
 

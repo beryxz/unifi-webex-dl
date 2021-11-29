@@ -29,8 +29,9 @@ class MultiProgressBar {
         bar.otick = bar.tick;
         bar.oterminate = bar.terminate;
         bar.oupdate = bar.update;
+        bar.index = index;
         bar.tick = (value, options) => {
-            this.tick(index, value, options);
+            this.tick(bar.index, value, options);
         };
         bar.terminate = () => {
             if (this.bars.every(v => v.complete)) {
@@ -38,10 +39,19 @@ class MultiProgressBar {
             }
         };
         bar.update = (value, options) => {
-            this.update(index, value, options);
+            this.update(bar.index, value, options);
         };
 
         return bar;
+    }
+
+    terminateSingleBar(index) {
+        delete this.bars[index];
+        this.bars.splice(index, 1);
+        for (let i = 0; i < this.bars.length; i++) {
+            if (i < index) continue;
+            this.bars[i].index -= 1;
+        }
     }
 
     terminate() {
@@ -63,7 +73,7 @@ class MultiProgressBar {
         if (bar) {
             this.move(index);
             bar.otick(value, options);
-            // this.moveCursorToEnd();
+            this.moveCursorToStart();
         }
     }
 
@@ -72,15 +82,14 @@ class MultiProgressBar {
         if (bar) {
             this.move(index);
             bar.oupdate(value, options);
-            // this.moveCursorToEnd();
+            this.moveCursorToStart();
         }
     }
 
-    //TODO: if improved, it could be used to reduce cursor flicker without using ascii chars that hide the cursor.
-    // moveCursorToEnd() {
-    //     this.stream.cursorTo(0);
-    //     this.move(this.bars.length);
-    // }
+    moveCursorToStart() {
+        this.stream.cursorTo(0);
+        this.move(0);
+    }
 }
 
 /**
@@ -122,6 +131,10 @@ class StatusProgressBar {
 
         emitter.on('data', (data) => {
             this.bar.tick(this._tickAmountGetter(data));
+        });
+
+        emitter.on('error', () => {
+            this._multiProgressBar.terminateSingleBar(this.bar.index);
         });
     }
 }
