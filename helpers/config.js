@@ -2,6 +2,7 @@ const { existsSync, readFileSync } = require('fs');
 const { isNone, isFilenameValidOnWindows } = require('./utils');
 const logger = require('./logging')('config');
 const yaml = require('yaml');
+const { execSync } = require('child_process');
 
 /**
  * @typedef Course
@@ -43,7 +44,7 @@ const yaml = require('yaml');
 /**
  * Assert that every config isn't undefined or null
  * @param {object} configs Object of configs
- * @throws Error with erroneous config
+ * @throws {Error} If some config is invalid. Check the error object for the precise reason.
  */
 function checkConfigs(configs) {
     for (const config in configs) {
@@ -55,6 +56,7 @@ function checkConfigs(configs) {
 /**
  * Check that each Course object in the array is valid
  * @param {Course[]} courses Array of course objects
+ * @throws {Error} If the config file is invalid. Check the error object for the precise reason.
  */
 function checkCourses(courses) {
     for (const c of courses) {
@@ -69,6 +71,17 @@ function checkCourses(courses) {
 
         if (!isFilenameValidOnWindows(c.name))
             logger.warn(`The [${c.id}] course has a 'name' which contains Windows reserved chars. On Windows this won't work!`);
+    }
+}
+
+/**
+ * Check for the ffmpeg binary in the system path
+ */
+function checkFFmpeg() {
+    try {
+        execSync('ffmpeg -version -hide_banner  ', {windowsHide: true, stdio: 'ignore'});
+    } catch {
+        throw new Error('ffmpeg binary not present in PATH');
     }
 }
 
@@ -139,7 +152,8 @@ async function load(configPath) {
     // check for all required configs
     checkConfigs({username, password, base_path});
     checkCourses(courses);
-    //TODO if ffmpeg autofix is enable, check that ffmpeg is available as a command in the system path. Additionally, check that the h264/MPEG-4 formats are supported for muxing/demuxing using "ffmpeg -formats"
+    if (fix_streams_with_ffmpeg)
+        checkFFmpeg();
 
     return {
         credentials: {

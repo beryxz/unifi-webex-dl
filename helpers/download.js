@@ -114,7 +114,7 @@ class HLSDownload extends Download {
         let sanitizedInput = inputFilePath.replace('"', '_');
         let sanitizedOutput = outputFilePath.replace('"', '_');
 
-        return exec(`ffmpeg -v warning -y -i "${sanitizedInput}" -c copy "${sanitizedOutput}"`)
+        return exec(`ffmpeg -hide_banner -v warning -y -i "${sanitizedInput}" -c copy "${sanitizedOutput}"`, {windowsHide: true})
             .then(({ stdout, stderr }) => {
                 // if stdout is not empty, an error or warning occurred.
                 if (stdout || stderr) {

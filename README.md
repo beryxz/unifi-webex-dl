@@ -71,7 +71,7 @@ The default config file path is `config.json` inside the root directory; you can
 | `progress_bar`             | boolean    | Yes      | true          | Show a progress bar while downloading the recordings.                                                                                                                                         |
 | `show_existing`            | boolean    | Yes      | true          | Show already downloaded recordings.                                                                                                                                                           |
 | `max_concurrent_downloads` | number     | Yes      | 3             | maximum number of parallel downloads.                                                                                                                                                         |
-| `fix_streams_with_ffmpeg`  | boolean    | Yes      | false         | Remux HLS recordings using ffmpeg. This requires ffmpeg to be installed and available on system path. Additionally, check that the h264/MPEG-4 formats are supported for remuxing operations. |
+| `fix_streams_with_ffmpeg`  | boolean    | Yes      | false         | Remux HLS recordings using ffmpeg. This requires ffmpeg to be installed and available on system path. Additionally, check that the h264/mp4/m4v formats are supported for remuxing operations. On linux you can check this using `ffmpeg -formats | egrep '(h264|mp4|m4v)'` |
 
 ### Courses
 
