@@ -50,7 +50,7 @@ function isFilenameValidOnWindows(filename) {
  */
 function replaceWindowsSpecialChars(text, replaceValue) {
     // eslint-disable-next-line no-control-regex
-    return text.replaceAll(/[<>:"/\\|?*\x00-\x1F\r\n]/g, replaceValue);
+    return text.replace(/[<>:"/\\|?*\x00-\x1F\r\n]/g, replaceValue);
 }
 
 /**
@@ -59,7 +59,7 @@ function replaceWindowsSpecialChars(text, replaceValue) {
  * @param {string} replaceValue A string containing the text to replace the matches with
  */
 function replaceWhitespaceChars(text, replaceValue) {
-    return text.replaceAll(/\s/g, replaceValue);
+    return text.replace(/\s/g, replaceValue);
 }
 
 /**

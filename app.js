@@ -88,7 +88,7 @@ async function createTempFolder() {
  */
 async function loginToMoodle(moodle, configs) {
     logger.info('Logging into Moodle');
-    moodle.loginMoodleUnifiedAuth(configs.credentials.username, configs.credentials.password);
+    return moodle.loginMoodleUnifiedAuth(configs.credentials.username, configs.credentials.password);
 }
 
 /**

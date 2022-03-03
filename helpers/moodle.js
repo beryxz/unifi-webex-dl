@@ -84,6 +84,7 @@ class Moodle {
             validateStatus: status => status === 302 || status === 303
         });
         this.sessionToken = checkMoodleCookie(res.headers['set-cookie']);
+        this.checkAuth();
     }
 
     /**
