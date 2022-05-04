@@ -159,6 +159,7 @@ class OneShotProgressBar {
             clear: true,
             total: 100
         });
+        this.bar.tick(0); // show the progress bar instantly
     }
 
     complete() {
