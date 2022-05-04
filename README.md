@@ -46,7 +46,7 @@ If a recording gives you an error, verify on Webex that it can actually be opene
 
 If you get a `429 Error`, it means that Webex received too many requests. In this case, you should wait sometime before trying again.
 
-If you download an event recording that doesn't ask for a password, it probably won't work. This case never occurred in my testings. Feel free to open an issue to let me know what happens.
+If the tool repeatedly fails to download a specific recording, feel free to open an issue to let me know what happens.
 
 ## Config
 
@@ -391,11 +391,12 @@ In the request, also add the following custom header
 
 `accessPwd: RECORDING_PASSWORD`
 
-In the response JSON object, save the parameter: `mp4StreamOption`
-
 **Optionally**: if you wanna get the approximate filesize, sum `fileSize` with `mediaDetectInfo.audioSize`
 
-### Download a HLS Stream - STEP 3
+1. If in the response JSON object there is the `downloadRecordingInfo.downloadInfo.hlsURL`, follow to [Download a HLS Stream - STEP 3b](#download-a-hls-stream---step-3b)
+2. Otherwise, save the parameter: `mp4StreamOption` and proceed to [Download a HLS Stream - STEP 3a](#download-a-hls-stream---step-3a)
+
+### Download a HLS Stream - STEP 3a
 
 > POST <https://nfg1vss.webex.com/apis/html5-pipeline.do>
 
@@ -423,3 +424,13 @@ Use all parameters in this URL, and you get the HLS Playlist file to download
 ```js
 let playlistFile = `https://nfg1vss.webex.com/hls-vod/recordingDir/${mp4StreamOption.recordingDir}/timestamp/${mp4StreamOption.timestamp}/token/${mp4StreamOption.token}/fileName/${HLS_FILE}.m3u8`
 ```
+
+### Download a HLS Stream - STEP 3b
+
+In this case the HLS playlist doesn't contain a list of segments but only the name of the recording with a bunch of ranges. We only need the recording name to download it and ignore the ranges part.
+
+> GET <https://nfg1wss.webex.com/nbr/MultiThreadDownloadServlet/.../hls.m3u8>
+
+In the response, containing the m3u8 playlist, match the `#EXT-X-MAP:URI="filename.mp4", ...` line and extract the filename.
+
+Download the recording replacing `hls.m3u8` with `filename.mp4` in the last URL -> <https://nfg1wss.webex.com/nbr/MultiThreadDownloadServlet/.../filename.mp4>

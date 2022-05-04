@@ -93,13 +93,19 @@ class HLSDownload extends Download {
     }
 
     /**
-     * Get all segments of a playlist URL
+     * Get all segments of a playlist URL.
+     * It supports two types of playlists, the ones where there's a list of segments and the ones where there's only one file with many BYTERANGE specified.
      * @param {string} playlistUrl The url from which to retrieve the m3u8 playlist file
      * @returns {Promise<string[]>} An array of segments URLs parsed from the playlist
      */
     static async parsePlaylistSegments(playlistUrl) {
         const res = await axios.get(playlistUrl);
 
+        // playlist has only one file with multiple BYTERANGE specified
+        if (/#EXT-X-MAP:URI/.test(res.data))
+            return [ res.data.match(/#EXT-X-MAP:URI="([^"]+)"/)?.[1] ];
+
+        // playlist has multiple segments
         return res.data.split(/[\r\n]+/).filter(row => !row.startsWith('#'));
     }
 
@@ -147,8 +153,12 @@ class HLSDownload extends Download {
      * @returns {Promise<number>} Number of downloaded segments.
      */
     async _downloadHLSPlaylistSegments(playlistUrl, savePath) {
+        //TODO: When there is only one large segment, the progress status is useless as it only updates on completion. This occurs for example when there is the hlsURL.
+
         // Download the hls stream
         const segments = await HLSDownload.parsePlaylistSegments(playlistUrl);
+        if (!Array.isArray(segments) || segments.length === 0)
+            throw new Error('Playlist is empty');
         const totSegments = segments.length;
 
         this.emitter.emit('init', {

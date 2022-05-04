@@ -127,6 +127,7 @@ class StatusProgressBar {
                 clear: true,
                 total: this._totalGetter(data)
             });
+            this.bar.tick(0); // show the progress bar instantly
         });
 
         emitter.on('data', (data) => {

@@ -344,8 +344,6 @@ async function recordingStreamOptions(recording_url, password) {
  * @returns {object} { playlistUrl, filesize }
  */
 async function getWebexRecordingHSLPlaylist(recording_url, password) {
-    //TODO: implement the process for recordings of Events with disabled download
-
     // get mp4StreamOption
     logger.debug('Getting stream options');
     const streamOptions = await recordingStreamOptions(recording_url, password);
@@ -354,22 +352,30 @@ async function getWebexRecordingHSLPlaylist(recording_url, password) {
     let mp4StreamOption = streamOptions.mp4StreamOption;
 
     // get playlist filename
+    let playlistUrl;
     logger.debug('Getting playlist filename');
-    let res = await axios({
-        method: 'post',
-        url: 'https://nfg1vss.webex.com/apis/html5-pipeline.do',
-        params: {
-            recordingDir: mp4StreamOption.recordingDir,
-            timestamp: mp4StreamOption.timestamp,
-            token: mp4StreamOption.token,
-            xmlName: mp4StreamOption.xmlName
-        }
-    });
-    let playlistFilename = res.data.match(/<Sequence.+?>(.+?)<\/Sequence>/)?.[1];
-    if (playlistFilename === null)
-        throw new Error('Recording file not found');
+    // some recordings use nfg1wss and have the HLS playlist url directly in the stream options
+    let hlsURL = streamOptions?.downloadRecordingInfo?.downloadInfo?.hlsURL;
+    if (hlsURL) {
+        logger.debug('└─ Stream has hlsURL');
+        playlistUrl = hlsURL;
+    } else {
+        let res = await axios({
+            method: 'post',
+            url: 'https://nfg1vss.webex.com/apis/html5-pipeline.do',
+            params: {
+                recordingDir: mp4StreamOption.recordingDir,
+                timestamp: mp4StreamOption.timestamp,
+                token: mp4StreamOption.token,
+                xmlName: mp4StreamOption.xmlName
+            }
+        });
+        let playlistFilename = res.data.match(/<Sequence.+?>(.+?)<\/Sequence>/)?.[1];
+        if (playlistFilename === null)
+            throw new Error('Recording file not found');
+        playlistUrl = `https://nfg1vss.webex.com/hls-vod/recordingDir/${mp4StreamOption.recordingDir}/timestamp/${mp4StreamOption.timestamp}/token/${mp4StreamOption.token}/fileName/${playlistFilename}.m3u8`;
+    }
 
-    let playlistUrl = `https://nfg1vss.webex.com/hls-vod/recordingDir/${mp4StreamOption.recordingDir}/timestamp/${mp4StreamOption.timestamp}/token/${mp4StreamOption.token}/fileName/${playlistFilename}.m3u8`;
     let filesize = (streamOptions.fileSize ?? 0) + (streamOptions.mediaDetectInfo?.audioSize ?? 0);
     logger.debug(`└─ playlistUrl: ${playlistUrl}`);
     logger.debug(`└─ filesize: ${filesize}`);
