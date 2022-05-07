@@ -7,10 +7,14 @@
 const ProgressBar = require('progress');
 
 class MultiProgressBar {
-    constructor() {
+    /**
+     * @param {boolean} clearOnTerminate Clear all the bars when the last one terminates
+     */
+    constructor(clearOnTerminate = false) {
         this.stream = process.stderr;
         this.cursor = 0;
         this.bars = [];
+        this.clearOnTerminate = clearOnTerminate;
         return this;
     }
 
@@ -34,8 +38,10 @@ class MultiProgressBar {
             this.tick(bar.index, value, options);
         };
         bar.terminate = () => {
-            if (this.bars.every(v => v.complete)) {
-                this.terminate();
+            if (this.clearOnTerminate) {
+                if (this.bars.every(v => v.complete)) {
+                    this.terminate();
+                }
             }
         };
         bar.update = (value, options) => {
@@ -124,7 +130,7 @@ class StatusProgressBar {
                 complete: '=',
                 incomplete: ' ',
                 renderThrottle: 100,
-                clear: true,
+                clear: true, // bar.terminate has been hooked, this should always stay true
                 total: this._totalGetter(data)
             });
             this.bar.tick(0); // show the progress bar instantly
@@ -156,7 +162,7 @@ class OneShotProgressBar {
             complete: '=',
             incomplete: ' ',
             renderThrottle: 100,
-            clear: true,
+            clear: true, // bar.terminate has been hooked, this should always stay true
             total: 100
         });
         this.bar.tick(0); // show the progress bar instantly
