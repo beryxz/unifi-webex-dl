@@ -9,7 +9,7 @@ const { existsSync, readdirSync, unlinkSync, rmSync } = require('fs');
 const { StreamDownload, HLSDownload } = require('./helpers/download');
 const { getUTCDateTimestamp } = require('./helpers/date');
 const { MultiProgressBar, StatusProgressBar, OneShotProgressBar } = require('./helpers/progressbar');
-const { splitArrayInChunksOfFixedLength, retryPromise, sleep, replaceWindowsSpecialChars, replaceWhitespaceChars, mkdirIfNotExists, moveFile } = require('./helpers/utils');
+const { splitArrayInChunksOfFixedLength, retryPromise, sleep, replaceWindowsSpecialChars, replaceWhitespaceChars, mkdirIfNotExists, moveFile, remuxVideoWithFFmpeg } = require('./helpers/utils');
 const { default: axios } = require('axios');
 
 /**
@@ -197,7 +197,6 @@ async function downloadRecording(recording, course, downloadConfigs, multiProgre
     try {
         await mkdirIfNotExists(tmpDownloadFolderPath);
         let tmpDownloadFilePath = join(tmpDownloadFolderPath, 'recording.mp4');
-        let fileIsStream = false;
 
         // Try to use webex download feature and if it fails, fallback to hls stream feature
         try {
@@ -214,7 +213,6 @@ async function downloadRecording(recording, course, downloadConfigs, multiProgre
                     (data) => data.chunk.length);
             await dwnl.downloadStream(downloadUrl, tmpDownloadFilePath);
         } catch (error) {
-            fileIsStream = true;
             logger.warn(`      └─ [${downloadName}] ${error}`);
             logger.info(`      └─ [${downloadName}] Trying downloading stream`);
             const { playlistUrl, filesize } = await retryPromise(10, 1000, () => getWebexRecordingHSLPlaylist(recording.recording_url, recording.password));
@@ -230,11 +228,11 @@ async function downloadRecording(recording, course, downloadConfigs, multiProgre
         }
 
         // Download was successful, move rec to destination.
-        if (fileIsStream && downloadConfigs.fix_streams_with_ffmpeg) {
+        if (downloadConfigs.fix_streams_with_ffmpeg) {
             let progressBar = new OneShotProgressBar(multiProgressBar, `[${downloadName}] REMUX`);
             progressBar.init();
 
-            await HLSDownload.remuxVideoWithFFmpeg(tmpDownloadFilePath, downloadFilePath);
+            await remuxVideoWithFFmpeg(tmpDownloadFilePath, downloadFilePath);
             unlinkSync(tmpDownloadFilePath);
 
             progressBar.complete();

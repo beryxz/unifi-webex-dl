@@ -1,4 +1,6 @@
 const { access, mkdir, writeFileSync, unlinkSync, readFileSync, renameSync } = require('fs');
+const util = require('util');
+const exec = util.promisify(require('child_process').exec);
 
 /**
  * Split the source array in chunks of fixed length.
@@ -139,6 +141,28 @@ function moveFile(srcPath, dstPath) {
     }
 }
 
+/**
+ * Demux and Remux a video file, using ffmpeg, to fix container format and metadata issues.
+ * Useful for downloaded HLS stream where resulting file is a mess of concatenated segments.
+ * Note: Also useful for Webex recordings as they have many issues.
+ * @param {string} inputFilePath path to the file to remux
+ * @param {string} outputFilePath path where to save the remuxed file
+ * @returns {Promise<void>} resolved on success, rejected on failure
+ */
+async function remuxVideoWithFFmpeg(inputFilePath, outputFilePath) {
+    let sanitizedInput = inputFilePath.replace('"', '_');
+    let sanitizedOutput = outputFilePath.replace('"', '_');
+
+    return exec(`ffmpeg -hide_banner -v warning -y -i "${sanitizedInput}" -c copy "${sanitizedOutput}"`, {windowsHide: true})
+        .then(({ stdout, stderr }) => {
+            // if stdout is not empty, an error or warning occurred.
+            if (stdout || stderr) {
+                throw new Error(`FFmpeg failed the remux process: \n\n${stdout}\n\n${stderr}\n`);
+            }
+        })
+        .catch(err => { throw err; });
+}
+
 module.exports = {
     splitArrayInChunksOfFixedLength,
     isNone,
@@ -148,5 +172,6 @@ module.exports = {
     replaceWindowsSpecialChars,
     replaceWhitespaceChars,
     mkdirIfNotExists,
-    moveFile
+    moveFile,
+    remuxVideoWithFFmpeg
 };

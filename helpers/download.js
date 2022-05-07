@@ -4,9 +4,7 @@ const { existsSync, createWriteStream, createReadStream, unlinkSync } = require(
 const axios = require('axios').default;
 const url = require('url');
 const { join } = require('path');
-const util = require('util');
 const { EventEmitter } = require('stream');
-const exec = util.promisify(require('child_process').exec);
 
 class Download {
     get emitter() {
@@ -107,31 +105,6 @@ class HLSDownload extends Download {
 
         // playlist has multiple segments
         return res.data.split(/[\r\n]+/).filter(row => !row.startsWith('#'));
-    }
-
-    /**
-     * Demux and Remux a video file, using ffmpeg, to fix container format and metadata issues.
-     * Useful for downloaded HLS stream where resulting file is a mess of concatenated segments.
-     * @param {string} inputFilePath path to the file to remux
-     * @param {string} outputFilePath path where to save the remuxed file
-     * @returns {Promise<void>} resolved on success, rejected on failure
-     */
-    static async remuxVideoWithFFmpeg(inputFilePath, outputFilePath) {
-        let sanitizedInput = inputFilePath.replace('"', '_');
-        let sanitizedOutput = outputFilePath.replace('"', '_');
-
-        return exec(`ffmpeg -hide_banner -v warning -y -i "${sanitizedInput}" -c copy "${sanitizedOutput}"`, {windowsHide: true})
-            .then(({ stdout, stderr }) => {
-                // if stdout is not empty, an error or warning occurred.
-                if (stdout || stderr) {
-                    logger.debug(stdout);
-                    logger.debug(stderr);
-                    throw new Error('FFmpeg failed the remux process');
-                }
-            })
-            .catch(err => {
-                throw err;
-            });
     }
 
     /**

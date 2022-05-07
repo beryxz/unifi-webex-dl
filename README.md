@@ -2,7 +2,7 @@
 
 > Download recorded lessons from UniFi's Webex platform passing by the Moodle platform.
 
-This utility can automatically download all UniFi courses' recordings saved on webex.
+This utility can automatically download all UniFi courses' recordings saved on Webex.
 
 ## Quick Start
 
@@ -40,7 +40,7 @@ Note a few things:
 Errors related to stream downloads:
 
 - If a recording doesn't seem to have the audio while reproducing it with the Windows Media Player, try with a different player such as VLC.
-- If there are stutters while scrubbing the timeline, this is caused by the way HLS recordings are downloaded. To solve this, install `ffmpeg`, enable the `fix_streams_with_ffmpeg` option and then delete-and-redownload the stream recordings.
+- If there are stutters while scrubbing the timeline or segments missing audio, this is caused by the way HLS recordings are downloaded and by how poorly Webex encodes the recordings. To solve this, install `ffmpeg`, enable the `fix_streams_with_ffmpeg` option and then delete-and-redownload the faulty recordings.
 
 If a recording gives you an error, verify on Webex that it can actually be opened before opening an issue. Recordings could be disabled by the course organizer.
 
@@ -52,7 +52,7 @@ If the tool repeatedly fails to download a specific recording, feel free to open
 
 > The config file has 3 sections.
 
-Currently, both **.json** and **.yaml** file are supported, json being the default one.
+Currently, both **.json** and **.yaml** file are supported, JSON being the default one.
 
 The default config file path is `config.json` inside the root directory; you can change it with the environment variable `CONFIG_PATH`.
 
@@ -71,7 +71,7 @@ The default config file path is `config.json` inside the root directory; you can
 | `progress_bar`             | boolean    | Yes      | true          | Show a progress bar while downloading the recordings.                                                                                                                                         |
 | `show_existing`            | boolean    | Yes      | true          | Show already downloaded recordings.                                                                                                                                                           |
 | `max_concurrent_downloads` | number     | Yes      | 3             | maximum number of parallel downloads.                                                                                                                                                         |
-| `fix_streams_with_ffmpeg`  | boolean    | Yes      | false         | Remux HLS recordings using ffmpeg. This requires ffmpeg to be installed and available on system path. Additionally, check that the h264/mp4/m4v formats are supported for remuxing operations. On linux you can check this using `ffmpeg -formats | egrep '(h264|mp4|m4v)'` |
+| `fix_streams_with_ffmpeg`  | boolean    | Yes      | false         | Remux all recordings using ffmpeg. This requires ffmpeg to be installed and available on system path. Additionally, check that the h264/mp4/m4v formats are supported for remuxing operations. On Linux you can check this using `ffmpeg -formats | egrep '(h264|mp4|m4v)'` |
 
 ### Courses
 
@@ -149,7 +149,7 @@ Finally, get the authenticated `MoodleSession` Cookie from the Set-Cookie respon
 
 ### Get Webex Id
 
-To launch Webex, we have to get the Webex course id relative to the moodle course id.
+To launch Webex, we have to get the Webex course id relative to the Moodle course id.
 
 > GET <https://e-l.unifi.it/course/view.php?id=42>
 
@@ -242,7 +242,7 @@ Otherwise, follow along...
 
 Get all `name` and `values` attributes from the input tags.
 
-Note that you may need to change `firstEntry` to false since the js does it there:
+Note that you may need to change `firstEntry` to false since the JS does it there:
 
 ```js
 document.forms[0].firstEntry.value=false;
