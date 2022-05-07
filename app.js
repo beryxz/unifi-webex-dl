@@ -6,11 +6,12 @@ const { launchWebex, getWebexRecordings, getWebexRecordingDownloadUrl, getWebexR
 const logger = require('./helpers/logging')('app');
 const { join } = require('path');
 const { existsSync, readdirSync, unlinkSync, rmSync } = require('fs');
-const { StreamDownload, HLSDownload } = require('./helpers/download');
+const { downloadHLS, downloadStream } = require('./helpers/download');
 const { getUTCDateTimestamp } = require('./helpers/date');
 const { MultiProgressBar, StatusProgressBar, OneShotProgressBar } = require('./helpers/progressbar');
 const { splitArrayInChunksOfFixedLength, retryPromise, sleep, replaceWindowsSpecialChars, replaceWhitespaceChars, mkdirIfNotExists, moveFile, remuxVideoWithFFmpeg } = require('./helpers/utils');
 const { default: axios } = require('axios');
+const { EventEmitter } = require('stream');
 
 /**
  * @typedef FetchedCourse
@@ -27,6 +28,13 @@ const { default: axios } = require('axios');
  * @property {import('./helpers/webex').Recording[]} recordings
  * @property {number} totalCount
  * @property {number} filteredCount
+ */
+
+/**
+ * @typedef ProgressBarConfig
+ * @type {object}
+ * @property {MultiProgressBar} [multiProgressBar=null] MultiProgressBar instance to render download status
+ * @property {string} downloadName Name of the download to show in the download status
  */
 
 /**
@@ -144,14 +152,89 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
     let chunks = splitArrayInChunksOfFixedLength(recordings, downloadConfigs.max_concurrent_downloads);
 
     for (const chunk of chunks) {
-        const multiProgressBar = (downloadConfigs.progress_bar ? new MultiProgressBar() : null);
+        const multiProgressBar = (downloadConfigs.progress_bar ? new MultiProgressBar(false) : null);
 
         let downloads = chunk.map(recording =>
             downloadRecording(recording, course, downloadConfigs, multiProgressBar));
 
         await Promise.all(downloads)
-            .catch(err => {throw err;});
+            .catch(err => { throw err; })
+            .finally(() => { if (multiProgressBar) multiProgressBar.terminate(); });
     }
+}
+
+/**
+ * Wrapper to download a stream file from an url to a file. It uses the `file_url` property of the Recording.
+ *
+ * The wrapper manages the various initialization and the progress bar.
+ * Returns a promise that resolves if the stream was downloaded successfully, rejects it otherwise.
+ *
+ * @param {import('./helpers/webex').Recording} recording The recording to download, using the `file_url` property.
+ * @param {string} savePath Path in which to save the downloaded file.
+ * @param {ProgressBarConfig} progressBarConfig Configs for logs and progressBar.
+ * @returns {Promise<void>} A promise that resolves if the stream was downloaded successfully, rejects it otherwise.
+ */
+async function downloadStreamWrapper(recording, savePath, progressBarConfig) {
+    logger.debug(`      └─ [${progressBarConfig.downloadName}] Trying to download stream`);
+
+    const downloadUrl = await getWebexRecordingDownloadUrl(recording.file_url, recording.password);
+
+    const statusEmitter = new EventEmitter();
+    if (progressBarConfig.multiProgressBar !== null)
+        new StatusProgressBar(
+            progressBarConfig.multiProgressBar,
+            statusEmitter,
+            (data) => `[${progressBarConfig.downloadName}] ${bytes(parseInt(data.filesize), BYTES_OPTIONS).padStart(9)}`,
+            (data) => data.filesize,
+            (data) => data.chunkLength);
+
+    downloadStream(downloadUrl, savePath, statusEmitter);
+
+    return new Promise((resolve, reject) => {
+        statusEmitter.on('finish', resolve);
+        statusEmitter.on('error', (err) => {
+            reject(err);
+        });
+    });
+}
+
+/**
+ * Wrapper to download an HLS stream file from an url to a file. It uses the `recording_url` property of the Recording.
+ *
+ * The wrapper manages the various initialization and the progress bar.
+ * Returns a promise that resolves if the stream was downloaded successfully, rejects it otherwise.
+ *
+ * @param {import('./helpers/webex').Recording} recording The reecording to download using the `recording_url` property.
+ * @param {string} savePath Path in which to save the downloaded file.
+ * @param {string} tmpFolderPath Path to a temp folder to be used internally to save intermediary segments.
+ * @param {ProgressBarConfig} progressBarConfig Configs for logs and progressBar.
+ * @returns {Promise<void>} A promise that resolves if the HLS stream was downloaded successfully, rejects it otherwise.
+ */
+async function downloadHLSWrapper(recording, savePath, tmpFolderPath, progressBarConfig) {
+    logger.debug(`      └─ [${progressBarConfig.downloadName}] Trying to download HLS`);
+
+    const statusEmitter = new EventEmitter();
+    const { playlistUrl, filesize } = await retryPromise(10, 2000,
+        () => getWebexRecordingHSLPlaylist(recording.recording_url, recording.password));
+
+    // progress bar
+    if (progressBarConfig.multiProgressBar !== null) {
+        new StatusProgressBar(
+            progressBarConfig.multiProgressBar,
+            statusEmitter,
+            (data) => `[${progressBarConfig.downloadName}] ${(data.stage === 'DOWNLOAD') ? (bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9)) : 'MERGE'}`,
+            (data) => data.segmentsCount,
+            () => null);
+    }
+
+    downloadHLS(playlistUrl, savePath, tmpFolderPath, statusEmitter);
+
+    return new Promise((resolve, reject) => {
+        statusEmitter.on('finish', resolve);
+        statusEmitter.on('error', (err) => {
+            reject(err);
+        });
+    });
 }
 
 /**
@@ -197,34 +280,16 @@ async function downloadRecording(recording, course, downloadConfigs, multiProgre
     try {
         await mkdirIfNotExists(tmpDownloadFolderPath);
         let tmpDownloadFilePath = join(tmpDownloadFolderPath, 'recording.mp4');
+        const progressBarConfig = {
+            multiProgressBar: downloadConfigs.progress_bar ? multiProgressBar : null,
+            downloadName: downloadName
+        };
 
         // Try to use webex download feature and if it fails, fallback to hls stream feature
         try {
-            logger.debug(`      └─ [${downloadName}] Trying download feature`);
-            const downloadUrl = await getWebexRecordingDownloadUrl(recording.file_url, recording.password);
-
-            let dwnl = new StreamDownload();
-            if (downloadConfigs.progress_bar)
-                new StatusProgressBar(
-                    multiProgressBar,
-                    dwnl.emitter,
-                    (data) => `[${downloadName}] ${bytes(parseInt(data.filesize), BYTES_OPTIONS).padStart(9)}`,
-                    (data) => data.filesize,
-                    (data) => data.chunk.length);
-            await dwnl.downloadStream(downloadUrl, tmpDownloadFilePath);
+            await downloadStreamWrapper(recording, tmpDownloadFilePath, progressBarConfig);
         } catch (error) {
-            logger.warn(`      └─ [${downloadName}] ${error}`);
-            logger.info(`      └─ [${downloadName}] Trying downloading stream`);
-            const { playlistUrl, filesize } = await retryPromise(10, 1000, () => getWebexRecordingHSLPlaylist(recording.recording_url, recording.password));
-            let dwnl = new HLSDownload(tmpDownloadFolderPath);
-            if (downloadConfigs.progress_bar)
-                new StatusProgressBar(
-                    multiProgressBar,
-                    dwnl.emitter,
-                    (data) => `[${downloadName}] ${(data.stage === 'DOWNLOAD') ? (bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9)) : 'MERGE'}`,
-                    (data) => data.segmentsCount,
-                    () => null);
-            await dwnl.downloadHLS(playlistUrl, tmpDownloadFilePath);
+            await downloadHLSWrapper(recording, tmpDownloadFilePath, tmpDownloadFolderPath, progressBarConfig);
         }
 
         // Download was successful, move rec to destination.

@@ -4,73 +4,19 @@ const { existsSync, createWriteStream, createReadStream, unlinkSync } = require(
 const axios = require('axios').default;
 const url = require('url');
 const { join } = require('path');
-const { EventEmitter } = require('stream');
 
-class Download {
-    get emitter() {
-        return this._emitter;
-    }
-
-    constructor() {
-        this._emitter = new EventEmitter();
-    }
-}
-
-class StreamDownload extends Download {
-    constructor() {
-        super();
-    }
-
-    /**
-     * Download a stream file from an url to a file
-     * @param {string} url The download url
-     * @param {string} savePath Where to save the downloaded file
-     */
-    async downloadStream(url, savePath) {
-        const { data, headers } = await axios.get(url, {
-            responseType: 'stream'
-        });
-
-        this.emitter.emit('init', {
-            filesize: parseInt(headers['content-length']),
-        });
-        data.on('data', (chunk) => {
-            this.emitter.emit('data', { chunk: chunk });
-        });
-
-        const writer = createWriteStream(savePath);
-        data.pipe(writer);
-
-        await (new Promise((resolve, reject) => {
-            writer.on('finish', resolve);
-            writer.on('error', (err) => {
-                this.emitter.emit('error');
-                reject(err);
-            });
-            data.on('error', (err) => {
-                this.emitter.emit('error');
-                reject(err);
-            });
-        }));
-    }
-}
-
-class HLSDownload extends Download {
+const HLS_CONFIG = {
     /**
      * Max retries for each segment
      * @type {number}
      */
-    static get SEGMENT_RETRY_COUNT() {
-        return 20;
-    }
+    SEGMENT_RETRY_COUNT: 20,
 
     /**
      * Delay before retrying each failed segment
      * @type {number}
      */
-    static get SEGMENT_RETRY_DELAY() {
-        return 1000;
-    }
+    SEGMENT_RETRY_DELAY: 1000,
 
     /**
      * Max number of segments downloaded simultaneously.
@@ -78,145 +24,201 @@ class HLSDownload extends Download {
      * A value too high can cause sudden crashes without errors.
      * @type {number}
      */
-    static get MAX_PARALLEL_SEGMENTS() {
-        return 8;
-    }
+    MAX_PARALLEL_SEGMENTS: 8
+};
 
-    /**
-     * @param {string} tmpFolderPath Path to a temp folder to be used internally
-     */
-    constructor(tmpFolderPath) {
-        super();
-        this.tmpFolderPath = tmpFolderPath;
-    }
+/**
+ * Download a stream file from an url to a file.
+ *
+ * Emit download events through the statusEmitter instance:
+ * - 'init' event on creation
+ * - 'data' event on each chunk
+ * - 'error' event on error
+ * - 'finish' event on end of download
+ *
+ * Use the 'finish' event to check when the download has finished
+ *
+ * @param {string} url The file url to download as a stream.
+ * @param {string} savePath Path in which to save the downloaded file.
+ * @param {EventEmitter} statusEmitter EventEmitter instance where to emit status updates on the download
+ */
+async function downloadStream(url, savePath, statusEmitter) {
+    const { data, headers } = await axios.get(url, {
+        responseType: 'stream'
+    });
 
-    /**
-     * Get all segments of a playlist URL.
-     * It supports two types of playlists, the ones where there's a list of segments and the ones where there's only one file with many BYTERANGE specified.
-     * @param {string} playlistUrl The url from which to retrieve the m3u8 playlist file
-     * @returns {Promise<string[]>} An array of segments URLs parsed from the playlist
-     */
-    static async parsePlaylistSegments(playlistUrl) {
-        const res = await axios.get(playlistUrl);
+    // init
+    statusEmitter.emit('init', {
+        filesize: parseInt(headers['content-length']),
+    });
 
-        // playlist has only one file with multiple BYTERANGE specified
-        if (/#EXT-X-MAP:URI/.test(res.data))
-            return [ res.data.match(/#EXT-X-MAP:URI="([^"]+)"/)?.[1] ];
+    // data
+    data.on('data', (chunk) => {
+        statusEmitter.emit('data', { chunkLength: chunk.length });
+    });
+    const writer = createWriteStream(savePath);
+    data.pipe(writer);
 
-        // playlist has multiple segments
-        return res.data.split(/[\r\n]+/).filter(row => !row.startsWith('#'));
-    }
+    // error
+    writer.on('error', (err) => {
+        statusEmitter.emit('error', err);
+    });
+    data.on('error', (err) => {
+        statusEmitter.emit('error', err);
+    });
 
-    /**
-     * Download an HLS playlist stream from an m3u8 url to a file
-     * @param {string} playlistUrl The HLS m3u8 playlist file url
-     * @param {string} resultFilePath filepath where to save the file
-     * @returns {Promise<void>}
-     */
-    async downloadHLS(playlistUrl, resultFilePath) {
-        return this._downloadHLSPlaylistSegments(playlistUrl, this.tmpFolderPath)
-            .then(downloadedSegments =>
-                this._mergeHLSPlaylistSegments(this.tmpFolderPath, resultFilePath, downloadedSegments));
-    }
+    // finish
+    writer.on('finish', () => {
+        statusEmitter.emit('finish');
+    });
+}
 
-    /**
-     * Download each segment of an HLS playlist stream from an m3u8 url to single files named `segNum.ts`
-     * @param {string} playlistUrl The HLS m3u8 playlist file url
-     * @param {string} savePath Existing path to folder where to save the stream segments
-     * @returns {Promise<number>} Number of downloaded segments.
-     */
-    async _downloadHLSPlaylistSegments(playlistUrl, savePath) {
-        //TODO: When there is only one large segment, the progress status is useless as it only updates on completion. This occurs for example when there is the hlsURL.
+/**
+ * Get all segments of a playlist URL.
+ * It supports two types of playlists, the ones where there's a list of segments and the ones where there's only one file with many BYTERANGE specified.
+ * @param {string} playlistUrl The url from which to retrieve the m3u8 playlist file
+ * @returns {Promise<string[]>} An array of segments URLs parsed from the playlist
+ */
+async function parseHLSPlaylistSegments(playlistUrl) {
+    const res = await axios.get(playlistUrl);
 
-        // Download the hls stream
-        const segments = await HLSDownload.parsePlaylistSegments(playlistUrl);
-        if (!Array.isArray(segments) || segments.length === 0)
-            throw new Error('Playlist is empty');
-        const totSegments = segments.length;
+    // playlist has only one file with multiple BYTERANGE specified
+    if (/#EXT-X-MAP:URI/.test(res.data))
+        return [ res.data.match(/#EXT-X-MAP:URI="([^"]+)"/)?.[1] ];
 
-        this.emitter.emit('init', {
-            stage: 'DOWNLOAD',
-            segmentsCount: totSegments,
+    // playlist has multiple segments
+    return res.data.split(/[\r\n]+/).filter(row => !row.startsWith('#'));
+}
+
+/**
+ * Download an HLS playlist stream from an m3u8 url to a file
+ *
+ * Emit download events through the statusEmitter instance:
+ * - 'init' event on download start, or merge start.
+ * - 'data' event on segment downloaded, or segment merged
+ * - 'error' event on error
+ * - 'finish' event emitted when recording finished downloading and has been merged successfully.
+ *
+ * `init` is called multiple times with the `stage` of the download, either "DOWNLOAD" or "MERGE".
+ *
+ * Use the 'finish' event to check when the download has finished.
+ *
+ * @param {string} playlistUrl The HLS m3u8 playlist file url.
+ * @param {string} savePath Path in which to save the downloaded file.
+ * @param {string} tmpFolderPath Path to a temp folder to be used internally to save intermediary segments.
+ * @param {EventEmitter} statusEmitter EventEmitter instance where to emit status updates on the download
+ */
+function downloadHLS(playlistUrl, savePath, tmpFolderPath, statusEmitter) {
+    _downloadHLSPlaylistSegments(playlistUrl, tmpFolderPath, statusEmitter)
+        .then(downloadedSegmentsCount =>
+            _mergeHLSPlaylistSegments(tmpFolderPath, savePath, downloadedSegmentsCount, statusEmitter))
+        .then(() =>
+            statusEmitter.emit('finish'))
+        .catch(err =>
+            statusEmitter.emit('error', err));
+}
+
+/**
+ * Download each segment of an HLS playlist stream from an m3u8 url to single files named `segNum.ts`
+ * @param {string} playlistUrl The HLS m3u8 playlist file url
+ * @param {string} savePath Existing path to folder where to save the stream segments
+ * @param {EventEmitter} statusEmitter EventEmitter instance where to emit status updates on the download
+ * @returns {Promise<number>} Number of downloaded segments.
+ */
+async function _downloadHLSPlaylistSegments(playlistUrl, savePath, statusEmitter) {
+    //TODO: When there is only one large segment, the progress status is useless as it only updates on completion. This occurs for example when there is the hlsURL. If there is only one segment, then this should be downloaded with downloadStream and not with downloadHLS
+
+    // Download the hls stream
+    const segments = await parseHLSPlaylistSegments(playlistUrl);
+    if (!Array.isArray(segments) || segments.length === 0)
+        throw new Error('Playlist is empty');
+    const totSegments = segments.length;
+
+    statusEmitter.emit('init', {
+        stage: 'DOWNLOAD',
+        segmentsCount: totSegments,
+    });
+
+    // download each segment
+    let segmentNum = 1;
+    let chunks = splitArrayInChunksOfFixedLength(segments, HLS_CONFIG.MAX_PARALLEL_SEGMENTS);
+
+    for (const chunk of chunks) {
+        let segments = chunk.map(segmentUrl => {
+            const TMP_NUM = segmentNum++;
+
+            // download segment
+            return new Promise((resolve, reject) => {
+                let dwnlFn = async () => {
+                    const res = await axios.get(url.resolve(playlistUrl, segmentUrl), {
+                        responseType: 'stream'
+                    });
+
+                    let fileStream = createWriteStream(join(savePath, `${TMP_NUM}.ts`));
+
+                    // wait for segment to download
+                    res.data.pipe(fileStream);
+                    res.data.on('end', () => {
+                        statusEmitter.emit('data', { segmentDownloaded: TMP_NUM });
+                        resolve();
+                    });
+                };
+
+                retryPromise(HLS_CONFIG.SEGMENT_RETRY_COUNT, HLS_CONFIG.SEGMENT_RETRY_DELAY, dwnlFn)
+                    .catch(err => {
+                        reject(new Error(`Segment ${segmentNum}: ${err.message}`));
+                    });
+            });
         });
 
-        // download each segment
-        let segmentNum = 1;
-        let chunks = splitArrayInChunksOfFixedLength(segments, HLSDownload.MAX_PARALLEL_SEGMENTS);
-
-        for (const chunk of chunks) {
-            let segments = chunk.map(segmentUrl => {
-                const TMP_NUM = segmentNum++;
-
-                // download segment
-                return new Promise((resolve, reject) => {
-                    let dwnlFn = async () => {
-                        const res = await axios.get(url.resolve(playlistUrl, segmentUrl), {
-                            responseType: 'stream'
-                        });
-
-                        let fileStream = createWriteStream(join(savePath, `${TMP_NUM}.ts`));
-
-                        // wait for segment to download
-                        res.data.pipe(fileStream);
-                        res.data.on('end', () => {
-                            this.emitter.emit('data', { segmentDownloaded: TMP_NUM });
-                            resolve();
-                        });
-                    };
-
-                    retryPromise(HLSDownload.SEGMENT_RETRY_COUNT, HLSDownload.SEGMENT_RETRY_DELAY, dwnlFn)
-                        .catch(err => {
-                            this.emitter.emit('error');
-                            reject(new Error(`Segment ${segmentNum}: ${err.message}`));
-                        });
-                });
-            });
-
-            await Promise.all(segments).catch(err => {throw err;});
-        }
-
-        return totSegments;
+        await Promise.all(segments).catch(err => {throw err;});
     }
 
-    /**
-     * Merge the segments downloaded with downloadHLSPlaylist()
-     * @param {string} segmentsPath Path to the folder containing the downloaded hls segments
-     * @param {string} resultFilePath Path where to save the merged file
-     * @param {number} downloadedSegments Number of segments to merge
-     * @returns {Promise<void>}
-     */
-    async _mergeHLSPlaylistSegments(segmentsPath, resultFilePath, downloadedSegments) {
-        const outputFile = createWriteStream(resultFilePath);
+    return totSegments;
+}
 
-        this.emitter.emit('init', {
-            stage: 'MERGE',
-            segmentsCount: downloadedSegments,
+/**
+ * Merge the segments downloaded with downloadHLSPlaylist()
+ * @param {string} segmentsPath Path to the folder containing the downloaded hls segments
+ * @param {string} resultFilePath Path where to save the merged file
+ * @param {number} downloadedSegments Number of segments to merge
+ * @param {EventEmitter} statusEmitter EventEmitter instance where to emit status updates on the download
+ * @returns {Promise<void>}
+ */
+async function _mergeHLSPlaylistSegments(segmentsPath, resultFilePath, downloadedSegments, statusEmitter) {
+    const outputFile = createWriteStream(resultFilePath);
+
+    statusEmitter.emit('init', {
+        stage: 'MERGE',
+        segmentsCount: downloadedSegments,
+    });
+
+    for (let segmentNum = 1; segmentNum <= downloadedSegments; segmentNum++) {
+        let segmentPath = join(segmentsPath, `${segmentNum}.ts`);
+        if (!existsSync(segmentPath)) throw new Error(`Missing segment number ${segmentNum}`);
+
+        const segment = createReadStream(segmentPath);
+
+        segment.pipe(outputFile, { end: false });
+        await new Promise((resolve, reject) => {
+            segment.on('end', () => {
+                statusEmitter.emit('data', { segmentMerged: segmentNum });
+                resolve();
+            });
+            segment.on('error', (err) => {
+                reject(err);
+            });
         });
 
-        for (let segmentNum = 1; segmentNum <= downloadedSegments; segmentNum++) {
-            let segmentPath = join(segmentsPath, `${segmentNum}.ts`);
-            if (!existsSync(segmentPath)) throw new Error(`Missing segment number ${segmentNum}`);
-
-            const segment = createReadStream(segmentPath);
-
-            segment.pipe(outputFile, { end: false });
-            await new Promise((resolve) => {
-                segment.on('end', () => {
-                    this.emitter.emit('data', { segmentMerged: segmentNum });
-                    resolve();
-                });
-            });
-
-            try {
-                unlinkSync(segmentPath);
-            } catch (err) {
-                logger.debug(`Error deleting tmp segment: ${err.message}`);
-            }
+        try {
+            unlinkSync(segmentPath);
+        } catch (err) {
+            logger.debug(`Error deleting tmp segment: ${err.message}`);
         }
     }
 }
 
 module.exports = {
-    StreamDownload,
-    HLSDownload
+    downloadStream,
+    downloadHLS
 };
