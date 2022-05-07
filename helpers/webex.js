@@ -242,7 +242,7 @@ async function meetingRecordingPassword(res, password, fileUrl) {
  * @param {string} fileUrl The webex recording file url from which to start the download procedure
  * @param {string} password The webex recording password
  * @throws {Error} If an error occurred.
- * @return {string} The url from which to download the recording
+ * @return {Promise<string>} The url from which to download the recording
  */
 async function getWebexRecordingDownloadUrl(fileUrl, password) {
     let res, params;

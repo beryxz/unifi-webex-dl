@@ -65,6 +65,17 @@ async function loadConfig() {
 }
 
 /**
+ * Setup common configs for axios static instance
+ */
+function setupAxios() {
+    Object.assign(axios.defaults, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0'
+        }
+    });
+}
+
+/**
  * Helper to create the temp folder removing all temp files of previous executions that were abruptly interrupted
  * @returns {Promise<void>}
  * @throws {Error} If temp directory couldn't be created
@@ -98,42 +109,82 @@ async function loginToMoodle(moodle, configs) {
  * @return {Promise<FetchedRecordings>}
  */
 async function getRecordings(course, moodle) {
-    return await moodle.getWebexLaunchOptions(course.id, course?.custom_webex_id)
+    const recordingsAll = await moodle.getWebexLaunchOptions(course.id, course?.custom_webex_id)
         .then(webexLaunch => launchWebex(webexLaunch))
         .then(webexObject => getWebexRecordings(webexObject))
-        .then(recordingsAll => {
-            const recordings = recordingsAll.filter(rec => {
-                try {
-                    let createdAt = new Date(rec.created_at).getTime();
-                    return !(
-                        (course.skip_before_date && new Date(course.skip_before_date) > createdAt) ||
-                        (course.skip_after_date && new Date(course.skip_after_date) < createdAt) ||
-                        (course.skip_names && RegExp(course.skip_names).test(rec.name))
-                    );
-                } catch (err) {
-                    return true;
-                }
-            });
-
-            return {
-                recordings: recordings,
-                totalCount: recordingsAll.length,
-                filteredCount: recordingsAll.length - recordings.length
-            };
-        })
         .catch(err => { throw err; });
+
+    const recordingsFiltered = recordingsAll.filter(rec => {
+        try {
+            let createdAt = new Date(rec.created_at).getTime();
+            return !(
+                (course.skip_before_date && new Date(course.skip_before_date) > createdAt) ||
+                (course.skip_after_date && new Date(course.skip_after_date) < createdAt) ||
+                (course.skip_names && RegExp(course.skip_names).test(rec.name))
+            );
+        } catch (err) {
+            return true;
+        }
+    });
+
+    return {
+        recordings: recordingsFiltered,
+        totalCount: recordingsAll.length,
+        filteredCount: recordingsAll.length - recordingsFiltered.length
+    };
 }
 
 /**
- * If downloadPath doesn't exists, download the recording and save it.
+ * Process a moodle course's recordings, and download all missing ones from webex
+ * @param {config.Course} course The moodle course to process
+ * @param {import('./helpers/webex').Recording[]} recordings Recordings to process
+ * @param {Promise<config.ConfigDownload>} downloadConfigs Download section configs
+ */
+async function processCourseRecordings(course, recordings, downloadConfigs) {
+    let chunks = splitArrayInChunksOfFixedLength(recordings, downloadConfigs.max_concurrent_downloads);
+
+    for (const chunk of chunks) {
+        const multiProgressBar = (downloadConfigs.progress_bar ? new MultiProgressBar() : null);
+
+        let downloads = chunk.map(recording =>
+            downloadRecording(recording, course, downloadConfigs, multiProgressBar));
+
+        await Promise.all(downloads)
+            .catch(err => {throw err;});
+    }
+}
+
+/**
+ * If the recording doesn't alredy exists, download the recording and save it.
  * @param {import('./helpers/webex').Recording} recording Recording to download
+ * @param {config.Course} course The moodle course to process
  * @param {config.ConfigDownload} downloadConfigs Download section configs
- * @param {string} downloadFilePath Final file save-path after download its complete
- * @param {string} tmpDownloadFolderPath Temporary save-path folder, used until the download its complete
  * @param {MultiProgressBar} [multiProgressBar=null] MultiProgressBar instance to render download status
  * @returns {Promise<void>}
  */
-async function downloadRecordingIfNotExists(recording, downloadConfigs, downloadFilePath, tmpDownloadFolderPath, multiProgressBar = null) {
+async function downloadRecording(recording, course, downloadConfigs, multiProgressBar = null) {
+    // filename
+    let filename = replaceWhitespaceChars(replaceWindowsSpecialChars(`${recording.name}.${recording.format}`, '_'), '_');
+    if (course.prepend_date)
+        filename = `${getUTCDateTimestamp(recording.created_at, '')}-${filename}`;
+
+    // Make folder structure for downloadPath
+    let folderPath = join(
+        downloadConfigs.base_path,
+        course.name ? `${course.name}_${course.id}` : `${course.id}`
+    );
+    await mkdirIfNotExists(folderPath);
+
+    /** Final file save-path after download its complete */
+    let downloadFilePath = join(folderPath, filename);
+    /** hash of the recording's resulting filename */
+    let filenameHash = createHash('sha1').update(filename).digest('hex');
+    /** Temporary save-path folder, used until the download its complete */
+    let tmpDownloadFolderPath = join('./tmp/', filenameHash);
+
+
+
+
     if (existsSync(downloadFilePath)) {
         if (downloadConfigs.show_existing)
             logger.info(`   └─ Already exists: ${recording.name}`);
@@ -197,52 +248,12 @@ async function downloadRecordingIfNotExists(recording, downloadConfigs, download
 }
 
 /**
- * Process a moodle course's recordings, and download all missing ones from webex
- * @param {config.Course} course The moodle course to process
- * @param {import('./helpers/webex').Recording[]} recordings Recordings to process
- * @param {Promise<config.ConfigDownload>} downloadConfigs Download section configs
- */
-async function processCourseRecordings(course, recordings, downloadConfigs) {
-    let chunks = splitArrayInChunksOfFixedLength(recordings, downloadConfigs.max_concurrent_downloads);
-
-    for (const chunk of chunks) {
-        const multiProgressBar = new MultiProgressBar();
-
-        let downloads = chunk.map(recording => {
-            // filename
-            let filename = replaceWhitespaceChars(replaceWindowsSpecialChars(`${recording.name}.${recording.format}`, '_'), '_');
-            if (course.prepend_date)
-                filename = `${getUTCDateTimestamp(recording.created_at, '')}-${filename}`;
-
-            // Make folder structure for downloadPath
-            let folderPath = join(
-                downloadConfigs.base_path,
-                course.name ? `${course.name}_${course.id}` : `${course.id}`
-            );
-
-            let downloadPath = join(folderPath, filename);
-            let filenameHash = createHash('sha1').update(filename).digest('hex');
-            let tmpDownloadPath = join('./tmp/', filenameHash);
-
-            return mkdirIfNotExists(folderPath)
-                .then(() =>
-                    downloadRecordingIfNotExists(recording, downloadConfigs, downloadPath, tmpDownloadPath, (downloadConfigs.progress_bar ? multiProgressBar : null)))
-                .catch(err => {
-                    throw err;
-                });
-        });
-
-        await Promise.all(downloads).catch(err => {throw err;});
-    }
-}
-
-/**
  * Fetch the recordings list for each course
  * @param {Moodle} moodle Moodle instance
  * @param {config.Course[]} courses List of courses to fetchs
- * @return {Promise<Array.<Promise<FetchedCourse>>>}
+ * @return {Array.<Promise<FetchedCourse>>}
  */
-async function getCourses(moodle, courses) {
+function getCourses(moodle, courses) {
     logger.info('Fetching recordings lists');
 
     return courses.map((course) =>
@@ -272,7 +283,7 @@ async function getCourses(moodle, courses) {
  * @returns {Promise<void>}
  */
 async function processCourses(moodle, configs) {
-    const coursesToProcess = await getCourses(moodle, configs.courses);
+    const coursesToProcess = getCourses(moodle, configs.courses);
 
     for (const curCourse of coursesToProcess) {
         let { success, err, recordings, course } = await curCourse;
@@ -282,26 +293,15 @@ async function processCourses(moodle, configs) {
             logger.error(`└─ Error retrieving recordings: ${err.message}`);
             continue;
         }
+        logger.info(`└─ Found ${recordings.totalCount} recordings (${recordings.filteredCount} filtered)`);
 
         try {
-            logger.info(`└─ Found ${recordings.totalCount} recordings (${recordings.filteredCount} filtered)`);
             await processCourseRecordings(course, recordings.recordings, configs.download);
         } catch (err) {
             logger.error(`└─ Error processing recordings: ${err.message}`);
             continue;
         }
     }
-}
-
-/**
- * Setup common configs for axios static instance
- */
-function setupAxios() {
-    Object.assign(axios.defaults, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0'
-        }
-    });
 }
 
 (async () => {
