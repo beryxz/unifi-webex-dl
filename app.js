@@ -31,10 +31,10 @@ const { EventEmitter } = require('stream');
  */
 
 /**
- * @typedef ProgressBarConfig
+ * @typedef LogsConfig
  * @type {object}
  * @property {MultiProgressBar} [multiProgressBar=null] MultiProgressBar instance to render download status
- * @property {string} downloadName Name of the download to show in the download status
+ * @property {string} logStatusName Name of the download to show in the download status
  */
 
 /**
@@ -149,17 +149,32 @@ async function getRecordings(course, moodle) {
  * @param {Promise<config.ConfigDownload>} downloadConfigs Download section configs
  */
 async function processCourseRecordings(course, recordings, downloadConfigs) {
-    let chunks = splitArrayInChunksOfFixedLength(recordings, downloadConfigs.max_concurrent_downloads);
+    const courseDownloadPath = join(
+        downloadConfigs.base_path,
+        course.name ? `${course.name}_${course.id}` : `${course.id}`
+    );
+    await mkdirIfNotExists(courseDownloadPath);
+
+    const chunks = splitArrayInChunksOfFixedLength(recordings, downloadConfigs.max_concurrent_downloads);
 
     for (const chunk of chunks) {
         const multiProgressBar = (downloadConfigs.progress_bar ? new MultiProgressBar(false) : null);
 
-        let downloads = chunk.map(recording =>
-            downloadRecording(recording, course, downloadConfigs, multiProgressBar));
+        const downloads = chunk.map(async (recording) => {
+            try {
+                let filename = replaceWhitespaceChars(replaceWindowsSpecialChars(`${recording.name}.${recording.format}`, '_'), '_');
+                if (course.prepend_date)
+                    filename = `${getUTCDateTimestamp(recording.created_at, '')}-${filename}`;
 
-        await Promise.all(downloads)
-            .catch(err => { throw err; })
-            .finally(() => { if (multiProgressBar) multiProgressBar.terminate(); });
+                await downloadRecording(recording, filename, courseDownloadPath, downloadConfigs, multiProgressBar);
+            } catch (err) {
+                logger.error(`   └─ Skipping "${recording.name}": ${err.message}`);
+            }
+        });
+
+        // For simplicity, individual promises must not throw an error, as is the case here. Otherwise Promise.all fails and the entire course is skipped.
+        await Promise.all(downloads);
+        if (multiProgressBar) multiProgressBar.terminate();
     }
 }
 
@@ -171,20 +186,20 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
  *
  * @param {import('./helpers/webex').Recording} recording The recording to download, using the `file_url` property.
  * @param {string} savePath Path in which to save the downloaded file.
- * @param {ProgressBarConfig} progressBarConfig Configs for logs and progressBar.
+ * @param {LogsConfig} logsConfig Configs for logs and progressBar.
  * @returns {Promise<void>} A promise that resolves if the stream was downloaded successfully, rejects it otherwise.
  */
-async function downloadStreamWrapper(recording, savePath, progressBarConfig) {
-    logger.debug(`      └─ [${progressBarConfig.downloadName}] Trying to download stream`);
+async function downloadStreamWrapper(recording, savePath, logsConfig) {
+    logger.debug(`      └─ [${logsConfig.logStatusName}] Trying to download stream`);
 
     const downloadUrl = await getWebexRecordingDownloadUrl(recording.file_url, recording.password);
 
     const statusEmitter = new EventEmitter();
-    if (progressBarConfig.multiProgressBar !== null)
+    if (logsConfig.multiProgressBar !== null)
         new StatusProgressBar(
-            progressBarConfig.multiProgressBar,
+            logsConfig.multiProgressBar,
             statusEmitter,
-            (data) => `[${progressBarConfig.downloadName}] ${bytes(parseInt(data.filesize), BYTES_OPTIONS).padStart(9)}`,
+            (data) => `[${logsConfig.logStatusName}] ${bytes(parseInt(data.filesize), BYTES_OPTIONS).padStart(9)}`,
             (data) => data.filesize,
             (data) => data.chunkLength);
 
@@ -207,22 +222,22 @@ async function downloadStreamWrapper(recording, savePath, progressBarConfig) {
  * @param {import('./helpers/webex').Recording} recording The reecording to download using the `recording_url` property.
  * @param {string} savePath Path in which to save the downloaded file.
  * @param {string} tmpFolderPath Path to a temp folder to be used internally to save intermediary segments.
- * @param {ProgressBarConfig} progressBarConfig Configs for logs and progressBar.
+ * @param {LogsConfig} logsConfig Configs for logs and progressBar.
  * @returns {Promise<void>} A promise that resolves if the HLS stream was downloaded successfully, rejects it otherwise.
  */
-async function downloadHLSWrapper(recording, savePath, tmpFolderPath, progressBarConfig) {
-    logger.debug(`      └─ [${progressBarConfig.downloadName}] Trying to download HLS`);
+async function downloadHLSWrapper(recording, savePath, tmpFolderPath, logsConfig) {
+    logger.debug(`      └─ [${logsConfig.logStatusName}] Trying to download HLS`);
 
     const statusEmitter = new EventEmitter();
     const { playlistUrl, filesize } = await retryPromise(10, 2000,
         () => getWebexRecordingHSLPlaylist(recording.recording_url, recording.password));
 
     // progress bar
-    if (progressBarConfig.multiProgressBar !== null) {
+    if (logsConfig.multiProgressBar !== null) {
         new StatusProgressBar(
-            progressBarConfig.multiProgressBar,
+            logsConfig.multiProgressBar,
             statusEmitter,
-            (data) => `[${progressBarConfig.downloadName}] ${(data.stage === 'DOWNLOAD') ? (bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9)) : 'MERGE'}`,
+            (data) => `[${logsConfig.logStatusName}] ${(data.stage === 'DOWNLOAD') ? (bytes(parseInt(filesize), BYTES_OPTIONS).padStart(9)) : 'MERGE'}`,
             (data) => data.segmentsCount,
             () => null);
     }
@@ -239,74 +254,57 @@ async function downloadHLSWrapper(recording, savePath, tmpFolderPath, progressBa
 
 /**
  * If the recording doesn't alredy exists, download the recording and save it.
- * @param {import('./helpers/webex').Recording} recording Recording to download
- * @param {config.Course} course The moodle course to process
- * @param {config.ConfigDownload} downloadConfigs Download section configs
- * @param {MultiProgressBar} [multiProgressBar=null] MultiProgressBar instance to render download status
- * @returns {Promise<void>}
+ * @param {import('./helpers/webex').Recording} recording Webex Recording object to download.
+ * @param {string} filename The filename of the recording.
+ * @param {string} courseDownloadPath The course's download folder where to save recordings.
+ * @param {config.ConfigDownload} downloadConfigs Download section configs.
+ * @param {MultiProgressBar} [multiProgressBar=null] MultiProgressBar instance to render download status.
+ * @returns {Promise<void>} A promise that resolves if the download completed successfully, rejects it otherwise
  */
-async function downloadRecording(recording, course, downloadConfigs, multiProgressBar = null) {
-    // filename
-    let filename = replaceWhitespaceChars(replaceWindowsSpecialChars(`${recording.name}.${recording.format}`, '_'), '_');
-    if (course.prepend_date)
-        filename = `${getUTCDateTimestamp(recording.created_at, '')}-${filename}`;
-
-    // Make folder structure for downloadPath
-    let folderPath = join(
-        downloadConfigs.base_path,
-        course.name ? `${course.name}_${course.id}` : `${course.id}`
-    );
-    await mkdirIfNotExists(folderPath);
-
+async function downloadRecording(recording, filename, courseDownloadPath, downloadConfigs, multiProgressBar = null) {
     /** Final file save-path after download its complete */
-    let downloadFilePath = join(folderPath, filename);
-    /** hash of the recording's resulting filename */
-    let filenameHash = createHash('sha1').update(filename).digest('hex');
-    /** Temporary save-path folder, used until the download its complete */
-    let tmpDownloadFolderPath = join('./tmp/', filenameHash);
-
-
-
-
+    const downloadFilePath = join(courseDownloadPath, filename);
     if (existsSync(downloadFilePath)) {
         if (downloadConfigs.show_existing)
             logger.info(`   └─ Already exists: ${recording.name}`);
         return;
     }
-
     logger.info(`   └─ Downloading: ${recording.name}`);
-    const downloadName = getUTCDateTimestamp(recording.created_at, '');
 
+    /** hash of the recording's resulting filename */
+    const filenameHash = createHash('sha1').update(filename).digest('hex');
+
+    /** Path to a temporary folder where to save all files related to a recording. */
+    const tmpDownloadFolderPath = join('./tmp/', filenameHash);
+    await mkdirIfNotExists(tmpDownloadFolderPath);
+
+    /** Path to the temporary file in which to download the recording */
+    const tmpDownloadFilePath = join(tmpDownloadFolderPath, 'recording.mp4');
+
+    const logStatusName = getUTCDateTimestamp(recording.created_at, '');
+    const logsConfig = {
+        multiProgressBar: downloadConfigs.progress_bar ? multiProgressBar : null,
+        logStatusName: logStatusName
+    };
+
+    // Try to use webex download feature and if it fails, fallback to hls stream feature
     try {
-        await mkdirIfNotExists(tmpDownloadFolderPath);
-        let tmpDownloadFilePath = join(tmpDownloadFolderPath, 'recording.mp4');
-        const progressBarConfig = {
-            multiProgressBar: downloadConfigs.progress_bar ? multiProgressBar : null,
-            downloadName: downloadName
-        };
+        await downloadStreamWrapper(recording, tmpDownloadFilePath, logsConfig);
+    } catch (error) {
+        await downloadHLSWrapper(recording, tmpDownloadFilePath, tmpDownloadFolderPath, logsConfig);
+    }
 
-        // Try to use webex download feature and if it fails, fallback to hls stream feature
-        try {
-            await downloadStreamWrapper(recording, tmpDownloadFilePath, progressBarConfig);
-        } catch (error) {
-            await downloadHLSWrapper(recording, tmpDownloadFilePath, tmpDownloadFolderPath, progressBarConfig);
-        }
+    // Download was successful, move rec to destination.
+    if (downloadConfigs.fix_streams_with_ffmpeg) {
+        let progressBar = new OneShotProgressBar(multiProgressBar, `[${logStatusName}] REMUX`);
+        progressBar.init();
 
-        // Download was successful, move rec to destination.
-        if (downloadConfigs.fix_streams_with_ffmpeg) {
-            let progressBar = new OneShotProgressBar(multiProgressBar, `[${downloadName}] REMUX`);
-            progressBar.init();
+        await remuxVideoWithFFmpeg(tmpDownloadFilePath, downloadFilePath);
+        unlinkSync(tmpDownloadFilePath);
 
-            await remuxVideoWithFFmpeg(tmpDownloadFilePath, downloadFilePath);
-            unlinkSync(tmpDownloadFilePath);
-
-            progressBar.complete();
-        } else {
-            moveFile(tmpDownloadFilePath, downloadFilePath);
-        }
-    } catch (err) {
-        logger.error(`      └─ [${downloadName}] Skipped because of: ${err.message}`);
-        return;
+        progressBar.complete();
+    } else {
+        moveFile(tmpDownloadFilePath, downloadFilePath);
     }
 }
 
