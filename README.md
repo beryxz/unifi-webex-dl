@@ -44,7 +44,7 @@ Errors related to stream downloads:
 
 If a recording gives you an error, verify on Webex that it can actually be opened before opening an issue. Recordings could be disabled by the course organizer.
 
-If you get a `429 Error`, it means that Webex received too many requests. In this case, you should wait sometime before trying again.
+If you get a `429 Error`, it means that Webex received too many requests. In this case, you should wait some time before trying again.
 
 If the tool repeatedly fails to download a specific recording, feel free to open an issue to let me know what happens.
 
@@ -212,31 +212,30 @@ The response is an array of objects like the following
 
 ### Download a recording - STEP 1
 
-Before starting, it's essential to understand that there are two types of recordings.
+Before starting, to better understand the following operations, from what I understood, there are two types of recordings.
 
-There are recordings of `Meetings` and recordings of `Events`.
+There are recordings of `Meetings` and recordings of `Events`. Some of the following strategies are structured upon this idea.
 
-This two share only the last part of the process.
+As some teachers disable the download functionality, I've implemented multiple strategies to try and download the recordings. The following strategies are tried in order, if one fails, the next one is tried. If they all fail, the recording is skipped and an error is logged.
 
-The program first tries to download the files using the download function available in Webex.
-But, if it has been disabled, it tries to download the HLS stream using the streaming functionality of Webex.
+1. [Webex download functionality](#download-with-webex-functionality---step-1): uses the `file_url` property.
+2. [fallbackPlaySrc property](#download-using-fallbackplaysrc): Using the `recording_url`, download the `fallbackPlaySrc` property.
+3. [hlsURL property](#download-using-hlsurl): Using the `recording_url`, download using the `downloadRecordingInfo.downloadInfo.hlsURL` property.
+4. [HLS stream](#download-hls-stream---step-1): Using the `recording_url`, download using the `mp4StreamOptions` property.
 
-Start off with [Step 1a](#download-a-recording---step-1a)
-
-### Download a recording - STEP 1a
+### Download with Webex functionality - STEP 1
 
 > GET `file_url`
 
-1. If the response matches `Error` then, there's been an error. Probably the recording has been deleted or isn't available at the moment.
-Try with `recording_url` at [Step 1b](#download-a-hls-stream---step-1)
+1. If the response matches `Error` then, there's been an error. This means that the recording has the download functionality disabled, or has been deleted, or isn't available at the moment. Try with another strategy.
 
-2. If the response contains `'internalRecordTicket'` then you're downloading an event. Goto [STEP 2b](#download-a-recording---step-2b)
+2. If the response contains `'internalRecordTicket'` then you're downloading an event. Go to [STEP 2b](#download-with-webex-functionality---step-2b)
 
-3. If none of the above, then you're downloading a meeting. Goto [STEP 2a](#download-a-recording---step-2a)
+3. If none of the above, then you're downloading a meeting. Go to [STEP 2a](#download-with-webex-functionality---step-2a)
 
-### Download a recording - STEP 2a
+### Download with Webex functionality - STEP 2a
 
-If the response of the previous step doesn't contain `recordingpasswordcheck`, the recording doesn't need a password, and you can skip to [STEP 3](#download-a-recording---step-3). Also, note that if the response doesn't contain "commonGet2PostForm", you should instead skip to STEP 3 after the first request to `nbrshared.do`.
+If the response of the previous step doesn't contain `recordingpasswordcheck`, the recording doesn't need a password, and you can skip to [STEP 3](#download-with-webex-functionality---step-3). Also, note that if the response doesn't contain "commonGet2PostForm", you should instead skip to STEP 3 after the first request to `nbrshared.do`.
 
 Otherwise, follow along...
 
@@ -252,9 +251,9 @@ document.forms[0].firstEntry.value=false;
 
 The body should contain the input attributes from the previous request and the password of the recording.
 
-Goto [STEP 3](#download-a-recording---step-3)
+Go to [STEP 3](#download-with-webex-functionality---step-3)
 
-### Download a recording - STEP 2b
+### Download with Webex functionality - STEP 2b
 
 > Follow the `redirect` of the previous request.
 
@@ -306,9 +305,9 @@ Parse from the response the following fields:
 - recordID
 - serviceRecordID
 
-[STEP 3](#download-a-recording---step-3)
+Go to [STEP 3](#download-with-webex-functionality---step-3)
 
-### Download a recording - STEP 3
+### Download with Webex functionality - STEP 3
 
 From the previous request match `var href='https://unifirenze.webex.com/mw3300/mywebex/nbrshared.do?siteurl=unifirenze-en&action=publishfile&recordID=***&serviceRecordID=***&recordKey=***';`
 
@@ -367,17 +366,39 @@ Check the `status` that could be one of the following [`OKOK`, `Preparing`, `Err
 
 The response is the recording that can be saved as `name`.`format` (from the recording object).
 
-### Download a HLS Stream - STEP 1
+### Download using hlsURL
 
 > GET `recording_url`
 
-1. If the response matches `Error` then, there's been an error. This recording will be `Skipped`
+If in the response JSON object DOES NOT contain the `downloadRecordingInfo.downloadInfo.hlsURL`, this strategy won't work. Try another one.
+
+In this case the HLS playlist doesn't contain a list of segments but only the name of the recording with a bunch of ranges. We only need the recording name to download it and ignore the ranges part.
+
+> GET <https://nfg1wss.webex.com/nbr/MultiThreadDownloadServlet/.../hls.m3u8>
+
+In the response, containing the m3u8 playlist, match the `#EXT-X-MAP:URI="filename.mp4", ...` line and extract the filename.
+
+Download the recording replacing `hls.m3u8` with `filename.mp4` in the last URL -> <https://nfg1wss.webex.com/nbr/MultiThreadDownloadServlet/.../filename.mp4>
+
+### Download using fallbackPlaySrc
+
+> GET `recording_url`
+
+If in the response JSON object DOES NOT contain the `fallbackPlaySrc`, this strategy won't work. Try another one.
+
+> GET `fallbackPlaySrc`
+
+### Download HLS Stream - STEP 1
+
+> GET `recording_url`
+
+1. If the response matches `Error` then, there's been an error. Try another strategy.
 
 2. If the response contains `'internalRecordTicket'`, then you're downloading an event. This is a `WIP` since I never found an event recording with download disabled. Feel free to open an Issue to solve this.
 
-3. If none of the above, then you're downloading a meeting. Goto [Download a HLS Stream](#download-a-hls-stream---step-2)
+3. If none of the above, then you're downloading a meeting. Go to [Download HLS Stream](#download-hls-stream---step-2)
 
-### Download a HLS Stream - STEP 2
+### Download HLS Stream - STEP 2
 
 From the response of the `recording_url`, match the recording ID.
 
@@ -393,10 +414,9 @@ In the request, also add the following custom header
 
 **Optionally**: if you wanna get the approximate filesize, sum `fileSize` with `mediaDetectInfo.audioSize`
 
-1. If in the response JSON object there is the `downloadRecordingInfo.downloadInfo.hlsURL`, follow to [Download a HLS Stream - STEP 3b](#download-a-hls-stream---step-3b)
-2. Otherwise, save the parameter: `mp4StreamOption` and proceed to [Download a HLS Stream - STEP 3a](#download-a-hls-stream---step-3a)
+Save the `mp4StreamOption` parameter and proceed to [Download HLS Stream - STEP 3](#download-hls-stream---step-3)
 
-### Download a HLS Stream - STEP 3a
+### Download HLS Stream - STEP 3
 
 > POST <https://nfg1vss.webex.com/apis/html5-pipeline.do>
 
@@ -424,13 +444,3 @@ Use all parameters in this URL, and you get the HLS Playlist file to download
 ```js
 let playlistFile = `https://nfg1vss.webex.com/hls-vod/recordingDir/${mp4StreamOption.recordingDir}/timestamp/${mp4StreamOption.timestamp}/token/${mp4StreamOption.token}/fileName/${HLS_FILE}.m3u8`
 ```
-
-### Download a HLS Stream - STEP 3b
-
-In this case the HLS playlist doesn't contain a list of segments but only the name of the recording with a bunch of ranges. We only need the recording name to download it and ignore the ranges part.
-
-> GET <https://nfg1wss.webex.com/nbr/MultiThreadDownloadServlet/.../hls.m3u8>
-
-In the response, containing the m3u8 playlist, match the `#EXT-X-MAP:URI="filename.mp4", ...` line and extract the filename.
-
-Download the recording replacing `hls.m3u8` with `filename.mp4` in the last URL -> <https://nfg1wss.webex.com/nbr/MultiThreadDownloadServlet/.../filename.mp4>
