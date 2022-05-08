@@ -126,7 +126,7 @@ function downloadHLS(playlistUrl, savePath, tmpFolderPath, statusEmitter) {
  * @returns {Promise<number>} Number of downloaded segments.
  */
 async function _downloadHLSPlaylistSegments(playlistUrl, savePath, statusEmitter) {
-    //TODO: When there is only one large segment, the progress status is useless as it only updates on completion. This occurs for example when there is the hlsURL. If there is only one segment, then this should be downloaded with downloadStream and not with downloadHLS
+    //NOTE: When there's only one large segment, the progress status is useless as it only updates on completion.
 
     // Download the hls stream
     const segments = await parseHLSPlaylistSegments(playlistUrl);
@@ -220,5 +220,6 @@ async function _mergeHLSPlaylistSegments(segmentsPath, resultFilePath, downloade
 
 module.exports = {
     downloadStream,
-    downloadHLS
+    downloadHLS,
+    parseHLSPlaylistSegments
 };
