@@ -88,7 +88,7 @@ Please note that on Windows the `name` field shouldn't contain any of the not al
 | `skip_before_date` | string     | Yes      | Skip recordings before the date `YYYY-MM-DD`.                                                                       |
 | `skip_after_date`  | string     | Yes      | Skip recordings after the date `YYYY-MM-DD`.                                                                        |
 | `prepend_date`     | boolean    | Yes      | Prepend the date of the recording (`YYYYMMDD-`) to the filenames.                                                   |
-| `putNumberLesson`  | boolean     | Yes      | Appends the lessons a number (from 1 to the number of lesson available) at the start of the file name of the lesson.                                                                        |
+| `prepend_number`  | boolean     | Yes      | Appends the lessons a number (from 1 to the number of lesson available) at the start of the file name of the lesson.                                                                        |
 
 ## Environment variables
 
