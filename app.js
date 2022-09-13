@@ -148,7 +148,7 @@ async function getRecordings(course, moodle) {
  * @param {import('./helpers/webex').Recording[]} recordings Recordings to process
  * @param {Promise<config.ConfigDownload>} downloadConfigs Download section configs
  */
-async function processCourseRecordings(course, recordings, downloadConfigs) {
+async function processCourseRecordings(course, recordings, downloadConfigs, nLessons) {
     const courseDownloadPath = join(
         downloadConfigs.base_path,
         course.name ? `${course.name}_${course.id}` : `${course.id}`
@@ -156,6 +156,8 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
     await mkdirIfNotExists(courseDownloadPath);
 
     const chunks = splitArrayInChunksOfFixedLength(recordings, downloadConfigs.max_concurrent_downloads);
+
+    let lesson_number = nLessons; //let it start from 1
 
     for (const chunk of chunks) {
         const multiProgressBar = (downloadConfigs.progress_bar ? new MultiProgressBar(false) : null);
@@ -165,6 +167,11 @@ async function processCourseRecordings(course, recordings, downloadConfigs) {
                 let filename = replaceWhitespaceChars(replaceWindowsSpecialChars(`${recording.name}.${recording.format}`, '_'), '_');
                 if (course.prepend_date)
                     filename = `${getUTCDateTimestamp(recording.created_at, '')}-${filename}`;
+                if (course.putNumberLesson) {
+                    filename = `${lesson_number.toString()}-${filename}`;
+                    logger.debug(filename);
+                    lesson_number --;
+                }
 
                 await downloadRecording(recording, filename, courseDownloadPath, downloadConfigs, multiProgressBar);
             } catch (err) {
@@ -418,7 +425,7 @@ async function processCourses(moodle, configs) {
         logger.info(`└─ Found ${recordings.totalCount} recordings (${recordings.filteredCount} filtered)`);
 
         try {
-            await processCourseRecordings(course, recordings.recordings, configs.download);
+            await processCourseRecordings(course, recordings.recordings, configs.download, recordings.totalCount);
         } catch (err) {
             logger.error(`└─ Error processing recordings: ${err.message}`);
             continue;

@@ -14,6 +14,7 @@ const { execSync } = require('child_process');
  * @property {string} skip_before_date
  * @property {string} skip_after_date
  * @property {boolean} prepend_date
+ * @property {boolean} putNumberLesson
  */
 
 /**
