@@ -157,8 +157,6 @@ async function processCourseRecordings(course, recordings, downloadConfigs, nLes
 
     const chunks = splitArrayInChunksOfFixedLength(recordings, downloadConfigs.max_concurrent_downloads);
 
-    let lesson_number = nLessons; //let it start from 1
-
     for (const chunk of chunks) {
         const multiProgressBar = (downloadConfigs.progress_bar ? new MultiProgressBar(false) : null);
 
@@ -168,9 +166,9 @@ async function processCourseRecordings(course, recordings, downloadConfigs, nLes
                 if (course.prepend_date)
                     filename = `${getUTCDateTimestamp(recording.created_at, '')}-${filename}`;
                 if (course.prepend_number) {
-                    filename = `${lesson_number.toString()}-${filename}`;
+                    filename = `${nLessons.toString()}-${filename}`;
                     logger.debug(filename);
-                    lesson_number --;
+                    nLessons --;
                 }
 
                 await downloadRecording(recording, filename, courseDownloadPath, downloadConfigs, multiProgressBar);
