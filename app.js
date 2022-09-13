@@ -167,7 +167,7 @@ async function processCourseRecordings(course, recordings, downloadConfigs, nLes
                 let filename = replaceWhitespaceChars(replaceWindowsSpecialChars(`${recording.name}.${recording.format}`, '_'), '_');
                 if (course.prepend_date)
                     filename = `${getUTCDateTimestamp(recording.created_at, '')}-${filename}`;
-                if (course.putNumberLesson) {
+                if (course.prepend_number) {
                     filename = `${lesson_number.toString()}-${filename}`;
                     logger.debug(filename);
                     lesson_number --;
