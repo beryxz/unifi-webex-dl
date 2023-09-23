@@ -4,6 +4,29 @@
 
 This utility can automatically download all UniFi courses' recordings saved on Webex.
 
+## ⚠ Update 2023-09 ⚠
+
+Our University decided to not renew the contract with webex and therefore the recordings are not available anymore.
+
+For anyone interested in reusing this for webex recordings found somewhere else, it should be trivial to extract the webex logic as the downloader is modular.
+I'd suggest to use the `webex.js` helper together with the `downloadRecording` function defined in `app.js`. (All assuming webex didn't change the requests flow...)
+
+I'll archive this repository for the moment.
+
+## Index
+
+- [Quick Start](#quick-start)
+  - [Quick Start with Node](#optional-quick-start-with-node)
+  - [Quick Start with Docker](#optional-quick-start-with-docker)
+- [PLEASE NOTE - Known issues](#please-note---known-issues)
+- [Config](#config)
+  - [Credentials](#credentials)
+  - [Download](#download)
+  - [Courses](#courses)
+- [Environment variables](#environment-variables)
+- [Logging](#logging)
+- [How it works](#how-it-works)
+
 ## Quick Start
 
 The easiest way to start is by downloading the pre-compiled application from the latest release available.
@@ -14,7 +37,10 @@ Done, that's it!
 
 While being the easiest method, it does come with a drawback. To update it, you'll have to manually check the repository once in a while and download the latest version. For this reason, if possible, it is recommended to use the following method that uses Node directly.
 
-## [Optional] Quick Start with Node
+### [Optional] Quick Start with Node
+
+<details>
+<summary>[Optional] Quick Start with Node</summary>
 
 Node.js v14 or newer is required.
 
@@ -26,7 +52,12 @@ Node.js v14 or newer is required.
 
 When you pull new updates, remember to update project dependencies using `npm ci`.
 
-## [Optional] Quick Start with Docker
+</details>
+
+### [Optional] Quick Start with Docker
+
+<details>
+<summary>[Optional] Quick Start with Docker</summary>
 
 Suppose you are on Linux and have docker. In that case, you can execute the `docker.sh` to automatically execute the downloader inside of a container.
 
@@ -34,6 +65,8 @@ Note a few things:
 
 - Make sure to use the same UID and GID of your user in the `Dockerfile`. By default, they are both set to 1000;
 - If you use `.yaml` configs instead of `.json`, change the extension accordingly in `docker.sh`
+
+</details>
 
 ## PLEASE NOTE - Known issues
 
@@ -49,6 +82,9 @@ If you get a `429 Error`, it means that Webex received too many requests. In thi
 If the tool repeatedly fails to download a specific recording, feel free to open an issue to let me know what happens.
 
 ## Config
+
+<details>
+<summary>Config section</summary>
 
 > The config file has 3 sections.
 
@@ -89,6 +125,8 @@ Please note that on Windows the `name` field shouldn't contain any of the not al
 | `skip_after_date`  | string     | Yes      | Skip recordings after the date `YYYY-MM-DD`.                                                                        |
 | `prepend_date`     | boolean    | Yes      | Prepend the date of the recording (`YYYYMMDD-`) to the filenames.                                                   |
 
+</details>
+
 ## Environment variables
 
 The app tries to be as docker-friendly as possible.
@@ -106,6 +144,9 @@ Courses can also be specified through the `COURSES` env variable using the follo
 To modify the default log level of 'info', set the env variable `LOG_LEVEL` with one of [winston available log_level](https://github.com/winstonjs/winston#logging-levels).
 
 ## How it works
+
+<details>
+<summary>Inner workings of the downloader (Optional)</summary>
 
 Unfortunately, UniFi Moodle doesn't make use of REST APIs. So we have to do a bit of guessing and matching on the response body.
 
@@ -444,3 +485,5 @@ Use all parameters in this URL, and you get the HLS Playlist file to download
 ```js
 let playlistFile = `https://nfg1vss.webex.com/hls-vod/recordingDir/${mp4StreamOption.recordingDir}/timestamp/${mp4StreamOption.timestamp}/token/${mp4StreamOption.token}/fileName/${HLS_FILE}.m3u8`
 ```
+
+</details>
